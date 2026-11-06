@@ -1,6 +1,8 @@
+
 package NestVantage.API.service;
 
 import NestVantage.API.dto.SiteVisitRequest;
+import NestVantage.API.dto.SiteVisitStatusRequest;
 import NestVantage.API.entity.Lead;
 import NestVantage.API.entity.SiteVisit;
 import NestVantage.API.repository.LeadRepository;
@@ -71,6 +73,10 @@ public class SiteVisitService {
         return siteVisitRepository
                 .findByStatusOrderByVisitDateAscVisitTimeAsc("Booked");
     }
+    public List<SiteVisit> getVisitHistory() {
+    return siteVisitRepository
+            .findAllByOrderByVisitDateAscVisitTimeAsc();
+}
 
     @Transactional
     public void cancelVisit(Long id) {
@@ -79,6 +85,38 @@ public class SiteVisitService {
                 .orElseThrow(() ->
                         new IllegalArgumentException("Booking not found."));
 
-        siteVisitRepository.delete(visit);
+        if (!"Booked".equals(visit.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Only booked visits can be cancelled."
+            );
+        }
+
+        visit.setStatus("Cancelled");
+        siteVisitRepository.save(visit);
+    }
+
+    @Transactional
+    public void updateVisitStatus(Long id, SiteVisitStatusRequest request) {
+
+        SiteVisit visit = siteVisitRepository.findById(id)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Booking not found."));
+
+        if (!"Booked".equals(visit.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Only booked visits can be marked as completed or no show."
+            );
+        }
+
+        String newStatus = request.status();
+
+        if (!"Completed".equals(newStatus) && !"No Show".equals(newStatus)) {
+            throw new IllegalArgumentException(
+                    "Invalid status. Allowed values are Completed and No Show."
+            );
+        }
+
+        visit.setStatus(newStatus);
+        siteVisitRepository.save(visit);
     }
 }

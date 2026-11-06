@@ -24,3 +24,7 @@ export const updateLead = async (id, leadData) => {
   const response = await axios.put(`${API_URL}/${id}`, leadData)
   return response.data
 }
+// Delete a lead
+export const deleteLead = async (id) => {
+  await axios.delete(`${API_URL}/${id}`)
+}

@@ -5,15 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(
-    name = "site_visits",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_project_visit_slot",
-            columnNames = {"project_name", "visit_date", "visit_time"}
-        )
-    }
-)
+@Table(name = "site_visits")
 public class SiteVisit {
 
     @Id

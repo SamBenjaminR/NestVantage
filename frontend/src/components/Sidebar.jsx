@@ -7,6 +7,8 @@ import {
   BarChart3,
   Settings,
   Building2,
+  Handshake,
+  FileText,
 } from 'lucide-react'
 
 import { NavLink } from 'react-router-dom'
@@ -17,6 +19,8 @@ const menuItems = [
   { name: 'Site Visits', icon: CalendarDays, path: '/visits' },
   { name: 'AI Conversations', icon: MessageSquare, path: '/conversations' },
   { name: 'Analytics', icon: BarChart3, path: '/analytics' },
+  { name: 'Sales Handoffs', icon: Handshake, path: '/handoffs' },
+  { name: 'Property Fact Sheets', icon: FileText, path: '/properties' },
 ]
 
 function Sidebar() {

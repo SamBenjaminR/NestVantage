@@ -3,6 +3,7 @@ package NestVantage.API.controller;
 import NestVantage.API.dto.SiteVisitRequest;
 import NestVantage.API.entity.SiteVisit;
 import NestVantage.API.service.SiteVisitService;
+import NestVantage.API.dto.SiteVisitStatusRequest;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,7 +40,15 @@ public class SiteVisitController {
         return ResponseEntity.ok(
                 siteVisitService.getAllBookings()
         );
+        
     }
+    @GetMapping("/history")
+public ResponseEntity<List<SiteVisit>> getVisitHistory() {
+
+    return ResponseEntity.ok(
+            siteVisitService.getVisitHistory()
+    );
+}
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancelVisit(@PathVariable Long id) {
@@ -48,4 +57,14 @@ public class SiteVisitController {
 
         return ResponseEntity.noContent().build();
     }
+    @PatchMapping("/{id}/status")
+public ResponseEntity<Void> updateVisitStatus(
+        @PathVariable Long id,
+        @Valid @RequestBody SiteVisitStatusRequest request) {
+
+    siteVisitService.updateVisitStatus(id, request);
+
+    return ResponseEntity.noContent().build();
+}
+
 }

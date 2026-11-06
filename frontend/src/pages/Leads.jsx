@@ -4,6 +4,7 @@ import {
   Search,
   Phone,
   Eye,
+  Trash2,
   Copy,
   X,
   Plus,
@@ -13,6 +14,7 @@ import {
   getLeadById,
   createLead,
   updateLead,
+  deleteLead,
 } from '../services/leadService'
 
 const emptyForm = {
@@ -77,6 +79,8 @@ function Leads() {
 
   async function handleViewLead(databaseId) {
   try {
+    setEditingLead(null)
+    setEditError('')
     setDetailsLoading(true)
     setDetailsError('')
     setSelectedLead(null)
@@ -134,6 +138,26 @@ async function handleUpdateLead(event) {
     )
   } finally {
     setEditSaving(false)
+  }
+}
+  async function handleDeleteLead(lead) {
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${lead.name} (${lead.id})? This action cannot be undone.`
+  )
+
+  if (!confirmed) return
+
+  try {
+    await deleteLead(lead.databaseId)
+    setSuccessMessage('Lead deleted successfully.')
+    setSelectedLead(null)
+    await fetchLeads()
+  } catch (err) {
+    console.error('Failed to delete lead:', err)
+    setError(
+      err.response?.data?.error ||
+      'Unable to delete lead. Please try again.'
+    )
   }
 }
 
@@ -244,307 +268,6 @@ async function handleUpdateLead(event) {
   return (
     
     <main className="min-w-0 flex-1 bg-slate-50 p-8">
-      {/* Edit Lead Form */}
-{editingLead && (
-  <div className="mb-6 rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
-    <div className="mb-5 flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">
-          Edit Lead
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Update the buyer's information.
-        </p>
-      </div>
-
-      <button
-        onClick={() => {
-          setEditingLead(null)
-          setEditError('')
-        }}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-        aria-label="Close edit form"
-      >
-        <X size={20} />
-      </button>
-    </div>
-
-    <form onSubmit={handleUpdateLead}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Lead Code
-          </label>
-          <input
-            type="text"
-            value={editFormData.leadCode}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              leadCode: e.target.value
-            })}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Buyer Name
-          </label>
-          <input
-            type="text"
-            value={editFormData.buyerName}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              buyerName: e.target.value
-            })}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Phone Number
-          </label>
-          <input
-            type="text"
-            value={editFormData.phone}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              phone: e.target.value
-            })}
-            pattern="[0-9]{10}"
-            maxLength={10}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Lead Source
-          </label>
-          <select
-            value={editFormData.source}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              source: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="Website">Website</option>
-            <option value="Property Portal">Property Portal</option>
-            <option value="Social Media">Social Media</option>
-            <option value="Hoarding Call">Hoarding Call</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Project
-          </label>
-          <select
-            value={editFormData.projectName}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              projectName: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="Project 1">Project 1</option>
-            <option value="Project 2">Project 2</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Configuration
-          </label>
-          <select
-            value={editFormData.bhkType}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              bhkType: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="2 BHK">2 BHK</option>
-            <option value="3 BHK">3 BHK</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Budget
-          </label>
-          <input
-            type="text"
-            value={editFormData.budget}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              budget: e.target.value
-            })}
-            placeholder="e.g. 65L - 80L"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          />
-        </div>
-
-      </div>
-
-      {editError && (
-        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          {editError}
-        </p>
-      )}
-
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => setEditingLead(null)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Cancel
-        </button>
-
-        <button
-          type="submit"
-          disabled={editSaving}
-          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {editSaving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </form>
-  </div>
-)}
-      
-{/* Lead Details Panel */}
-{(detailsLoading || detailsError || selectedLead) && (
-  <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
-
-    {/* <div className="mb-5 flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">
-          Lead Details
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Complete information retrieved from the database.
-        </p>
-      </div> */}
-      <div className="mb-5 flex items-center justify-between">
-  <div>
-    <h2 className="text-lg font-semibold text-slate-900">Lead Details</h2>
-    <p className="mt-1 text-sm text-slate-500">
-      Complete information retrieved from the database.
-    </p>
-  </div>
-
-  <div className="flex items-center gap-2">
-    {selectedLead && (
-      <button
-        onClick={() => handleEditLead(selectedLead)}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-      >
-        Edit Lead
-      </button>
-    )}
-</div>
-
-      <button
-        onClick={() => {
-          setSelectedLead(null)
-          setDetailsError('')
-        }}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-        aria-label="Close lead details"
-      >
-        <X size={20} />
-      </button>
-    </div>
-
-    {detailsLoading && (
-      <p className="text-sm text-blue-600">
-        Loading lead details...
-      </p>
-    )}
-
-    {detailsError && (
-      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-        {detailsError}
-      </p>
-    )}
-
-    {selectedLead && (
-      <>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-bold text-slate-900">
-              {selectedLead.buyerName}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              {selectedLead.leadCode}
-            </p>
-          </div>
-
-          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
-            {selectedLead.status}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Phone Number</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.phone || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Lead Source</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.source || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Project</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.projectName || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Configuration</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.bhkType || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Budget</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.budget || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Created At</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.createdAt
-                ? new Date(selectedLead.createdAt).toLocaleString()
-                : 'Not available'}
-            </p>
-          </div>
-
-        </div>
-      </>
-    )}
-  </div>
-)}
-
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -892,6 +615,14 @@ async function handleUpdateLead(event) {
                         >
                         <Eye size={18} />
                       </button>
+
+                      <button
+                        title="Delete lead"
+                        onClick={() => handleDeleteLead(lead)}
+                        className="rounded-lg  p-2 text-red-600 hover:bg-red-50"
+                        >
+                        <Trash2 size={18} />
+                      </button>
                     </td>
                   </tr>
                 )
@@ -908,6 +639,306 @@ async function handleUpdateLead(event) {
           </table>
         </div>
       </div>
+              {/* Edit Lead Form */}
+{editingLead && (
+  <div className="mb-6 rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
+    <div className="mb-5 flex items-center justify-between">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">
+          Edit Lead
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Update the buyer's information.
+        </p>
+      </div>
+
+      <button
+        onClick={() => {
+          setEditingLead(null)
+          setEditError('')
+        }}
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+        aria-label="Close edit form"
+      >
+        <X size={20} />
+      </button>
+    </div>
+
+    <form onSubmit={handleUpdateLead}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Lead Code
+          </label>
+          <input
+            type="text"
+            value={editFormData.leadCode}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              leadCode: e.target.value
+            })}
+            required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Buyer Name
+          </label>
+          <input
+            type="text"
+            value={editFormData.buyerName}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              buyerName: e.target.value
+            })}
+            required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Phone Number
+          </label>
+          <input
+            type="text"
+            value={editFormData.phone}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              phone: e.target.value
+            })}
+            pattern="[0-9]{10}"
+            maxLength={10}
+            required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Lead Source
+          </label>
+          <select
+            value={editFormData.source}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              source: e.target.value
+            })}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="Website">Website</option>
+            <option value="Property Portal">Property Portal</option>
+            <option value="Social Media">Social Media</option>
+            <option value="Hoarding Call">Hoarding Call</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Project
+          </label>
+          <select
+            value={editFormData.projectName}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              projectName: e.target.value
+            })}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="Project 1">Project 1</option>
+            <option value="Project 2">Project 2</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Configuration
+          </label>
+          <select
+            value={editFormData.bhkType}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              bhkType: e.target.value
+            })}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="2 BHK">2 BHK</option>
+            <option value="3 BHK">3 BHK</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Budget
+          </label>
+          <input
+            type="text"
+            value={editFormData.budget}
+            onChange={(e) => setEditFormData({
+              ...editFormData,
+              budget: e.target.value
+            })}
+            placeholder="e.g. 65L - 80L"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+          />
+        </div>
+
+      </div>
+
+      {editError && (
+        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {editError}
+        </p>
+      )}
+
+      <div className="mt-6 flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => setEditingLead(null)}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          disabled={editSaving}
+          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {editSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </form>
+  </div>
+)}
+      
+{/* Lead Details Panel */}
+{(detailsLoading || detailsError || selectedLead) && (
+  <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+
+    {/* <div className="mb-5 flex items-center justify-between">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">
+          Lead Details
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Complete information retrieved from the database.
+        </p>
+      </div> */}
+      <div className="mb-5 flex items-center justify-between">
+  <div>
+    <h2 className="text-lg font-semibold text-slate-900">Lead Details</h2>
+    <p className="mt-1 text-sm text-slate-500">
+      Complete information retrieved from the database.
+    </p>
+  </div>
+
+  <div className="flex items-center gap-2">
+    {selectedLead && (
+      <button
+        onClick={() => handleEditLead(selectedLead)}
+        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+      >
+        Edit Lead
+      </button>
+    )}
+</div>
+
+      <button
+        onClick={() => {
+          setSelectedLead(null)
+          setDetailsError('')
+        }}
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+        aria-label="Close lead details"
+      >
+        <X size={20} />
+      </button>
+    </div>
+
+    {detailsLoading && (
+      <p className="text-sm text-blue-600">
+        Loading lead details...
+      </p>
+    )}
+
+    {detailsError && (
+      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        {detailsError}
+      </p>
+    )}
+
+    {selectedLead && (
+      <>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">
+              {selectedLead.buyerName}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {selectedLead.leadCode}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
+            {selectedLead.status}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Phone Number</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.phone || 'Not provided'}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Lead Source</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.source || 'Not provided'}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Project</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.projectName || 'Not provided'}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Configuration</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.bhkType || 'Not provided'}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Budget</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.budget || 'Not provided'}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">Created At</p>
+            <p className="mt-2 font-medium text-slate-900">
+              {selectedLead.createdAt
+                ? new Date(selectedLead.createdAt).toLocaleString()
+                : 'Not available'}
+            </p>
+          </div>
+
+        </div>
+      </>
+    )}
+  </div>
+)}
     </main>
   )
 }

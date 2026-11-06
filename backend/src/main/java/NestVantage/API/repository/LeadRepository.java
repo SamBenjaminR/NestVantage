@@ -19,5 +19,7 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
     boolean existsByPhone(String phone);
 
     boolean existsByPhoneAndIdNot(String phone, Long id);
+
+    Optional<Lead> findByPhone(String phone);
 }
     

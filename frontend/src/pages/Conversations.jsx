@@ -1,5 +1,6 @@
 
 import { useState } from 'react'
+import axios from 'axios'
 import {
   Bot,
   User,
@@ -28,68 +29,6 @@ const quickQuestions = [
   'I want to book a site visit',
 ]
 
-function getDemoReply(message, language) {
-  const text = message.toLowerCase()
-
-  if (
-    text.includes('price') ||
-    text.includes('cost') ||
-    text.includes('budget') ||
-    text.includes('कीमत') ||
-    text.includes('કિંમત')
-  ) {
-    if (language === 'Hindi') {
-      return 'दिए गए प्रोजेक्ट विवरण के अनुसार, अपार्टमेंट की कीमत ₹65 लाख से ₹1.2 करोड़ तक है। सटीक कीमत और उपलब्धता हमारी सेल्स टीम से कन्फर्म करनी होगी।'
-    }
-    if (language === 'Gujarati') {
-      return 'આપેલી પ્રોજેક્ટ માહિતી મુજબ, એપાર્ટમેન્ટની કિંમત ₹65 લાખથી ₹1.2 કરોડ સુધી છે. ચોક્કસ કિંમત અને ઉપલબ્ધતા અમારી સેલ્સ ટીમ પાસેથી ખાતરી કરવી પડશે.'
-    }
-    return 'According to the available project information, apartment prices range from ₹65 lakh to ₹1.2 crore. Our sales team will need to confirm the exact price and availability.'
-  }
-
-  if (
-    text.includes('bhk') ||
-    text.includes('apartment') ||
-    text.includes('flat') ||
-    text.includes('घर') ||
-    text.includes('ફ્લેટ')
-  ) {
-    if (language === 'Hindi') {
-      return 'उपलब्ध जानकारी के अनुसार, 2 BHK और 3 BHK अपार्टमेंट विकल्प हैं। आप किस प्रकार का अपार्टमेंट देखना चाहेंगे?'
-    }
-    if (language === 'Gujarati') {
-      return 'ઉપલબ્ધ માહિતી મુજબ, 2 BHK અને 3 BHK એપાર્ટમેન્ટ વિકલ્પો છે. તમે કયા પ્રકારનો એપાર્ટમેન્ટ જોવા માંગો છો?'
-    }
-    return 'The developer has two residential projects with 2 BHK and 3 BHK apartment options. Are you interested in a 2 BHK or a 3 BHK?'
-  }
-
-  if (
-    text.includes('visit') ||
-    text.includes('book') ||
-    text.includes('tour') ||
-    text.includes('મુલાકાત') ||
-    text.includes('विजिट')
-  ) {
-    if (language === 'Hindi') {
-      return 'ज़रूर! मैं आपकी साइट विज़िट की व्यवस्था करने में मदद कर सकती हूँ। कृपया अपनी पसंद की तारीख और समय बताएं। हमारी टीम उपलब्ध स्लॉट की पुष्टि करेगी।'
-    }
-    if (language === 'Gujarati') {
-      return 'ચોક્કસ! હું તમારી સાઇટ મુલાકાત ગોઠવવામાં મદદ કરી શકું છું. કૃપા કરીને તમારી પસંદગીની તારીખ અને સમય જણાવો. અમારી ટીમ ઉપલબ્ધ સમયની પુષ્ટિ કરશે.'
-    }
-    return 'Certainly! I can help arrange a site visit. Please tell me your preferred date and time. Our team will confirm the available slot.'
-  }
-
-  if (language === 'Hindi') {
-    return 'इस जानकारी की पुष्टि मेरे पास उपलब्ध प्रोजेक्ट विवरण में नहीं है। मैं आपको हमारी सेल्स टीम से जोड़ सकती हूँ।'
-  }
-
-  if (language === 'Gujarati') {
-    return 'આ માહિતી ઉપલબ્ધ પ્રોજેક્ટ વિગતોમાં નથી. હું તમને અમારી સેલ્સ ટીમ સાથે જોડવામાં મદદ કરી શકું છું.'
-  }
-
-  return "I don't have verified information about that in the project fact sheet. I can connect you with a sales executive who can confirm it."
-}
-
 function Conversations() {
   const [language, setLanguage] = useState('English')
   const [message, setMessage] = useState('')
@@ -97,6 +36,13 @@ function Conversations() {
   const [budget, setBudget] = useState('')
   const [requirements, setRequirements] = useState('')
   const [handoff, setHandoff] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [conversationId, setConversationId] = useState(null)
+  const [phone, setPhone] = useState('')
+  const [isHandoffLoading, setIsHandoffLoading] = useState(false)
+  const [handoffStatus, setHandoffStatus] = useState('')
+  const [handoffExecutive, setHandoffExecutive] = useState('')
+  
 
   const [messages, setMessages] = useState([
     {
@@ -117,9 +63,9 @@ function Conversations() {
     ])
   }
 
-  function sendMessage(textToSend = message) {
+  async function sendMessage(textToSend = message) {
     const cleanMessage = textToSend.trim()
-    if (!cleanMessage) return
+    if (!cleanMessage || isLoading) return
 
     const buyerMessage = {
       id: Date.now(),
@@ -127,33 +73,140 @@ function Conversations() {
       text: cleanMessage,
     }
 
-    const botMessage = {
-      id: Date.now() + 1,
-      sender: 'bot',
-      text: getDemoReply(cleanMessage, language),
-    }
+    // Include recent turns so Gemini can understand follow-up questions.
+    const recentConversation = messages
+      .slice(-8)
+      .map((item) => `${item.sender === 'buyer' ? 'Buyer' : 'Assistant'}: ${item.text}`)
+      .join('\\n')
 
-    setMessages((current) => [...current, buyerMessage, botMessage])
+    setMessages((current) => [...current, buyerMessage])
     setMessage('')
+    setIsLoading(true)
+
+    try {
+      const response = await axios.post('http://localhost:8080/api/ai/chat', {
+        message: cleanMessage,
+        conversationId,
+        buyerName: buyerName.trim() || null,
+        budget: budget || null,
+        requirements: requirements.trim() || null,
+        language,
+        context: `Continue this conversation using only the approved project facts. If a detail is not in the approved facts, say that the sales team must confirm it.
+
+        Recent conversation:
+        ${recentConversation}`,
+      })
+
+      setConversationId(response.data.conversationId)
+
+      const botMessage = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: response.data.reply,
+      }
+
+      setMessages((current) => [...current, botMessage])
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.error ||
+        'I could not connect to the AI assistant right now. Please try again.'
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: errorMessage,
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  function requestHuman() {
-    setHandoff(true)
-
+      
+async function requestHuman() {
+  if (!conversationId) {
     setMessages((current) => [
       ...current,
       {
         id: Date.now(),
-        sender: 'buyer',
-        text: 'I would like to speak to a human sales executive.',
+        sender: 'bot',
+        text: 'Please send at least one message before requesting a sales executive.',
       },
+    ])
+    return
+  }
+
+  if (!buyerName.trim()) {
+    alert('Please enter your name in Buyer details.')
+    return
+  }
+
+  if (!/^[0-9]{10}$/.test(phone.trim())) {
+    alert('Please enter a valid 10-digit phone number.')
+    return
+  }
+
+  if (isHandoffLoading || handoff) return
+
+  setIsHandoffLoading(true)
+
+  setMessages((current) => [
+    ...current,
+    {
+      id: Date.now(),
+      sender: 'buyer',
+      text: 'I would like to speak to a human sales executive.',
+    },
+  ])
+
+  try {
+    const response = await axios.post(
+      'http://localhost:8080/api/handoffs',
+      {
+        conversationId,
+        phone: phone.trim(),
+      }
+    )
+
+    const { status, executiveName } = response.data
+
+    setHandoff(true)
+    setHandoffStatus(status)
+    setHandoffExecutive(executiveName)
+
+    const confirmation =
+      status === 'ASSIGNED'
+        ? `Your request has been successfully assigned to ${executiveName}. The sales team can now review your conversation and contact you.`
+        : 'Your request has been saved successfully. No sales executive is currently available, so your request is waiting for manual assignment.'
+
+    setMessages((current) => [
+      ...current,
       {
         id: Date.now() + 1,
         sender: 'bot',
-        text: 'Your request has been marked for human follow-up. A sales executive will need to contact you. This demo does not send a real notification.',
+        text: confirmation,
       },
     ])
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.error ||
+      'Unable to submit your request right now. Please try again.'
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: errorMessage,
+      },
+    ])
+  } finally {
+    setIsHandoffLoading(false)
   }
+}
+
 
   return (
     <main className="min-w-0 flex-1 bg-slate-50 p-5 md:p-8">
@@ -184,7 +237,7 @@ function Conversations() {
                   </h2>
                   <p className="text-xs text-slate-500">
                     <span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                    Demo assistant
+                    Gemini AI assistant
                   </p>
                 </div>
               </div>
@@ -234,6 +287,16 @@ function Conversations() {
                   )}
                 </div>
               ))}
+              {isLoading && (
+                <div className="flex items-start gap-2">
+                  <div className="rounded-full bg-emerald-100 p-2 text-emerald-700">
+                    <Bot size={17} />
+                  </div>
+                  <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                    Gemini is typing...
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-200 p-4">
@@ -245,7 +308,8 @@ function Conversations() {
                   <button
                     key={question}
                     onClick={() => sendMessage(question)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:border-emerald-600 hover:text-emerald-700"
+                    disabled={isLoading}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:border-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {question}
                   </button>
@@ -267,21 +331,37 @@ function Conversations() {
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-emerald-700 px-4 text-white transition hover:bg-emerald-800"
+                  disabled={isLoading}
+                  className="rounded-xl bg-emerald-700 px-4 text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send message"
                 >
                   <Send size={18} />
                 </button>
               </form>
-
-              <button
+                                                 
+                <button
                 onClick={requestHuman}
-                disabled={handoff}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2.5 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Headphones size={17} />
-                {handoff ? 'Human follow-up requested' : 'Talk to a human'}
-              </button>
+                  disabled={handoff || isHandoffLoading || isLoading}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2.5 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                 <Headphones size={17} />
+                {isHandoffLoading
+                ? 'Submitting request...'
+                : handoff
+                ? `Request ${handoffStatus}`
+                : 'Talk to a human'}
+                </button>
+
+                {handoff && (
+                
+                <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <p className="font-semibold">Human handoff: {handoffStatus}</p>
+                    <p className="mt-1">
+                    Sales executive: {handoffExecutive}
+                  </p>
+                </div>
+              )}
+
             </div>
           </section>
 
@@ -303,6 +383,20 @@ function Conversations() {
                 placeholder="Enter buyer name"
                 className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
               />
+
+                      
+                  <label className="mb-1 block text-sm font-medium text-slate-600">
+                        Phone number
+                  </label>
+                  <input
+                    type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder="Enter 10-digit phone number"
+                      maxLength={10}
+                      className="mb-4 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
+                    />
+
 
               <label className="mb-1 block text-sm font-medium text-slate-600">
                 Budget range
@@ -331,7 +425,7 @@ function Conversations() {
               />
 
               <p className="mt-3 text-xs text-slate-400">
-                Demo fields only. Details are not saved to a database yet.
+                Buyer details are saved when a human handoff is requested.
               </p>
             </section>
 
@@ -374,11 +468,11 @@ function Conversations() {
           </aside>
         </div>
 
-        <p className="mt-4 text-xs text-slate-400">
-          Prototype notice: replies are rule-based demo responses. No real AI,
-          database storage, executive notification or external messaging is
-          connected yet.
-        </p>
+                <p className="mt-4 text-xs text-slate-400">
+                  Prototype notice: Gemini generates chat replies using approved
+                  project facts. Human handoff requests are saved in the database
+                  and assigned to available sales executives.
+                </p>
       </div>
     </main>
   )

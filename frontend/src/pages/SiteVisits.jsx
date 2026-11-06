@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react'
 
 import {
@@ -14,6 +13,7 @@ import {
   getAllBookings,
   createBooking,
   cancelBooking as cancelBookingApi,
+  updateVisitStatus,
 } from '../services/siteVisitService'
 
 const timeSlots = [
@@ -68,6 +68,7 @@ function mapBooking(booking) {
     project: booking.projectName,
     date: booking.visitDate,
     time: toDisplayTime(booking.visitTime),
+    status: booking.status || 'Booked',
   }
 }
 
@@ -117,15 +118,16 @@ function SiteVisits() {
 
   // Check whether the selected project's slot is booked.
   function isSlotBooked(time) {
-    if (!currentLead) return false
+  if (!currentLead) return false
 
-    return bookings.some(
-      (booking) =>
-        booking.project === currentLead.projectName &&
-        booking.date === selectedDate &&
-        booking.time === time
-    )
-  }
+  return bookings.some(
+    (booking) =>
+      booking.project === currentLead.projectName &&
+      booking.date === selectedDate &&
+      booking.time === time &&
+      booking.status === 'Booked'
+  )
+}
 
   const availableSlots = timeSlots.filter(
     (time) => !isSlotBooked(time)
@@ -187,9 +189,14 @@ function SiteVisits() {
     try {
       await cancelBookingApi(bookingId)
 
-      setBookings((previous) =>
-        previous.filter((booking) => booking.id !== bookingId)
-      )
+      // Update the booking status without removing its history.
+          setBookings((previous) =>
+          previous.map((booking) =>
+          booking.id === bookingId
+            ? { ...booking, status: 'Cancelled' }
+            :  booking
+          ) 
+        )
 
       if (confirmation?.id === bookingId) {
         setConfirmation(null)
@@ -201,6 +208,30 @@ function SiteVisits() {
       )
     }
   }
+        
+// Mark a booking as Completed or No Show.
+async function handleVisitStatus(bookingId, status) {
+  setError('')
+
+  try {
+    await updateVisitStatus(bookingId, status)
+
+    // Preserve the actual status selected by the user.
+    setBookings((previous) =>
+      previous.map((booking) =>
+        booking.id === bookingId
+          ? { ...booking, status: status }
+          : booking
+      )
+    )
+  } catch (err) {
+    setError(
+      err.response?.data?.error ||
+      'Unable to update visit status. Please try again.'
+    )
+  }
+}
+
 
   return (
     <main className="min-w-0 flex-1 bg-slate-50 p-8">
@@ -454,42 +485,76 @@ function SiteVisits() {
               <div className="space-y-3">
 
                 {bookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="rounded-lg border border-slate-200 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
+  <div
+    key={booking.id}
+    className="rounded-lg border border-slate-200 p-3"
+  >
+    {/* Buyer and Project Details */}
+    <div className="flex items-start justify-between gap-2">
+      <div>
+        <p className="text-sm font-semibold text-slate-800">
+          {booking.name}
+        </p>
 
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {booking.name}
-                        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {booking.project}
+        </p>
+      </div>
+    </div>
 
-                        <p className="mt-1 text-xs text-slate-500">
-                          {booking.project}
-                        </p>
-                      </div>
+    {/* Booking Actions */}
+                  {/* Booking Status and Actions */}
+<div className="mt-3 flex flex-wrap items-center gap-2">
+  <span
+    className={`rounded-full px-3 py-1 text-xs font-medium ${
+      booking.status === 'Booked'
+        ? 'bg-blue-50 text-blue-700'
+        : booking.status === 'Completed'
+        ? 'bg-green-50 text-green-700'
+        : booking.status === 'No Show'
+        ? 'bg-orange-50 text-orange-700'
+        : 'bg-slate-100 text-slate-600'
+    }`}
+  >
+    {booking.status}
+  </span>
 
-                      <button
-                        onClick={() => cancelBooking(booking.id)}
-                        title="Cancel booking"
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <XCircle size={18} />
-                      </button>
+  {booking.status === 'Booked' && (
+    <>
+      <button
+        onClick={() => handleVisitStatus(booking.id, 'Completed')}
+        className="rounded-md bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+      >
+        Completed
+      </button>
 
-                    </div>
+      <button
+        onClick={() => handleVisitStatus(booking.id, 'No Show')}
+        className="rounded-md bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+      >
+        No Show
+      </button>
 
-                    <p className="mt-3 text-xs text-slate-600">
-                      {booking.date} · {booking.time}
-                    </p>
+      <button
+        onClick={() => cancelBooking(booking.id)}
+        title="Cancel booking"
+        className="text-red-500 hover:text-red-700"
+      >
+        <XCircle size={18} />
+      </button>
+    </>
+  )}
+</div>
 
-                    <p className="mt-1 text-xs text-slate-400">
-                      {booking.visitCode}
-                    </p>
+    <p className="mt-3 text-xs text-slate-600">
+      {booking.date} · {booking.time}
+    </p>
 
-                  </div>
-                ))}
+    <p className="mt-1 text-xs text-slate-400">
+      {booking.visitCode}
+    </p>
+  </div>
+))}
 
               </div>
             )}

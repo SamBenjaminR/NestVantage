@@ -1,74 +1,157 @@
 
+import { useEffect, useState } from 'react'
 import {
   Users,
   CalendarCheck,
-  Clock,
+  CheckCircle2,
   TrendingUp,
-  ArrowUpRight,
   Search,
   Bell,
   Plus,
+  RefreshCw,
 } from 'lucide-react'
 
-const stats = [
-  {
-    title: 'Total Leads',
-    value: '3,000',
-    change: '+12.5%',
-    icon: Users,
-    color: 'blue',
-  },
-  {
-    title: 'Site Visits Booked',
-    value: '240',
-    change: '+8.2%',
-    icon: CalendarCheck,
-    color: 'green',
-  },
-  {
-    title: 'Avg. Response Time',
-    value: '2 min',
-    change: 'Target < 5 min',
-    icon: Clock,
-    color: 'orange',
-  },
-  {
-    title: 'Visit Conversion',
-    value: '8%',
-    change: '+2% target',
-    icon: TrendingUp,
-    color: 'purple',
-  },
-]
-
-const leads = [
-  {
-    id: 'LD-58210',
-    name: 'Hardik Patel',
-    source: 'Property Portal',
-    project: 'Project 1',
-    status: 'Visit Booked',
-    color: 'green',
-  },
-  {
-    id: 'LD-58211',
-    name: 'Nidhi Shah',
-    source: 'Social Media',
-    project: 'Project 2',
-    status: 'New Lead',
-    color: 'blue',
-  },
-  {
-    id: 'LD-58224',
-    name: 'Kavita Joshi',
-    source: 'Hoarding Call',
-    project: 'Project 2',
-    status: 'Visited',
-    color: 'purple',
-  },
-]
+import { getAllLeads } from '../services/leadService'
+import { getVisitHistory } from '../services/siteVisitService'
+import { useNavigate } from 'react-router-dom'
 
 function Dashboard() {
+  const [leads, setLeads] = useState([])
+  const [visits, setVisits] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
+
+  async function loadDashboard() {
+    try {
+      setLoading(true)
+      setError('')
+
+      const [leadData, visitData] = await Promise.all([
+        getAllLeads(),
+        getVisitHistory(),
+      ])
+
+      setLeads(leadData)
+      setVisits(visitData)
+    } catch (err) {
+      console.error('Failed to load dashboard:', err)
+      setError(
+        'Unable to load dashboard data. Please check the backend connection.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDashboard()
+  }, [])
+
+  // Calculate metrics using the same logic as Analytics.
+  const totalLeads = leads.length
+  const totalVisits = visits.length
+
+  const completed = visits.filter(
+    visit => visit.status === 'Completed'
+  ).length
+
+  const noShow = visits.filter(
+    visit => visit.status === 'No Show'
+  ).length
+
+  const decidedVisits = completed + noShow
+
+  const showUpRate = decidedVisits > 0
+    ? Math.round((completed / decidedVisits) * 100)
+    : 0
+
+  const leadsWithVisits = new Set(
+  visits
+    .filter(visit =>
+      ['Booked', 'Completed'].includes(visit.status)
+    )
+    .map(visit => visit.lead?.id)
+    .filter(Boolean)
+    ).size
+
+  const visitConversion = totalLeads > 0
+    ? Math.round((leadsWithVisits / totalLeads) * 100)
+    : 0
+
+  const stats = [
+    {
+      title: 'Total Leads',
+      value: totalLeads,
+      description: 'Leads recorded in database',
+      icon: Users,
+      color: 'blue',
+    },
+    {
+      title: 'Total Site Visits',
+      value: totalVisits,
+      description: 'All visit records',
+      icon: CalendarCheck,
+      color: 'green',
+    },
+    {
+      title: 'Completed Visits',
+      value: completed,
+      description: 'Successfully completed',
+      icon: CheckCircle2,
+      color: 'orange',
+    },
+    {
+      title: 'Visit Conversion',
+      value: `${visitConversion}%`,
+      description: `${leadsWithVisits} leads with visits`,
+      icon: TrendingUp,
+      color: 'purple',
+    },
+  ]
+
+  // Display the latest database records.
+  const recentLeads = [...leads]
+    .sort((a, b) => {
+      if (!a.createdAt) return 1
+      if (!b.createdAt) return -1
+
+      return new Date(b.createdAt) - new Date(a.createdAt)
+    })
+    .slice(0, 5)
+
+  if (loading) {
+    return (
+      <main className="min-w-0 flex-1 bg-slate-50 p-8">
+        <p className="text-slate-500">
+          Loading dashboard...
+        </p>
+      </main>
+    )
+  }
+
+  if (error) {
+    return (
+      <main className="min-w-0 flex-1 bg-slate-50 p-8">
+        <h2 className="text-2xl font-bold text-slate-900">
+          Dashboard
+        </h2>
+
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5">
+          <p className="text-sm text-red-700">{error}</p>
+
+          <button
+            onClick={loadDashboard}
+            className="mt-4 flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+          >
+            <RefreshCw size={16} />
+            Try Again
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-w-0 flex-1 bg-slate-50 p-8">
 
@@ -81,9 +164,20 @@ function Dashboard() {
           <p className="mt-1 text-sm text-slate-500">
             Welcome back! Here's your sales overview.
           </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Live figures based on records stored in the database.
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={loadDashboard}
+            title="Refresh dashboard"
+            className="rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 hover:bg-slate-50"
+          >
+            <RefreshCw size={19} />
+          </button>
+
           <button className="rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600">
             <Search size={19} />
           </button>
@@ -92,9 +186,12 @@ function Dashboard() {
             <Bell size={19} />
           </button>
 
-          <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
+          <button
+            onClick={() => navigate('/leads')}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+          >
             <Plus size={18} />
-            Add Lead
+              Add Lead
           </button>
         </div>
       </header>
@@ -123,10 +220,9 @@ function Dashboard() {
                 {stat.value}
               </h3>
 
-              <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-                <ArrowUpRight size={14} className="text-green-600" />
-                {stat.change}
-              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                {stat.description}
+              </p>
             </div>
           )
         })}
@@ -140,12 +236,15 @@ function Dashboard() {
               Recent Leads
             </h3>
             <p className="mt-1 text-xs text-slate-500">
-              Latest enquiries from all sources
+              Latest enquiries retrieved from the database
             </p>
           </div>
 
-          <button className="text-sm font-medium text-blue-600">
-            View all
+          <button
+            onClick={() => navigate('/leads')}
+            className="text-sm font-medium text-blue-600"
+          >
+          View all
           </button>
         </div>
 
@@ -161,32 +260,46 @@ function Dashboard() {
             </thead>
 
             <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="border-t border-slate-100">
+              {recentLeads.map((lead) => (
+                <tr
+                  key={lead.id}
+                  className="border-t border-slate-100"
+                >
                   <td className="px-5 py-4">
                     <p className="font-medium text-slate-900">
-                      {lead.name}
+                      {lead.buyerName}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {lead.id}
+                      {lead.leadCode}
                     </p>
                   </td>
 
                   <td className="px-5 py-4 text-slate-600">
-                    {lead.source}
+                    {lead.source || 'Unknown'}
                   </td>
 
                   <td className="px-5 py-4 text-slate-600">
-                    {lead.project}
+                    {lead.projectName || 'Not specified'}
                   </td>
 
                   <td className="px-5 py-4">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                      {lead.status}
+                      {lead.status || 'New Lead'}
                     </span>
                   </td>
                 </tr>
               ))}
+
+              {recentLeads.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="4"
+                    className="px-5 py-10 text-center text-sm text-slate-500"
+                  >
+                    No leads recorded yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

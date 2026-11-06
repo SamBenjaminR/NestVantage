@@ -108,5 +108,16 @@ if (leadRepository.existsByPhoneAndIdNot(request.phone(), id)) {
 
     return Optional.of(leadRepository.save(lead));
     }
+
+    @Transactional
+    public boolean deleteLead(Long id) {
+        if (!leadRepository.existsById(id)) {
+            return false;
+        }
+
+        leadRepository.deleteById(id);
+        return true;
+    }
     
 }
+

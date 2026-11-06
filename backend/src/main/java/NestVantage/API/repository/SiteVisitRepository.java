@@ -20,4 +20,7 @@ public interface SiteVisitRepository extends JpaRepository<SiteVisit, Long> {
 
     @EntityGraph(attributePaths = {"lead"})
     List<SiteVisit> findByStatusOrderByVisitDateAscVisitTimeAsc(String status);
+
+    @EntityGraph(attributePaths = {"lead"})
+    List<SiteVisit> findAllByOrderByVisitDateAscVisitTimeAsc();
 }

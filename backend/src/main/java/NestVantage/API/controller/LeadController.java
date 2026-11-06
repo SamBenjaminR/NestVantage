@@ -75,6 +75,17 @@ public class LeadController {
 
         return leadService.updateLead(id, request)
             .<ResponseEntity<?>>map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+            .orElse(ResponseEntity.notFound().build()); 
+        }
+        // DELETE /api/leads/{id}
+        @DeleteMapping("/{id}")
+            public ResponseEntity<Void> deleteLead(@PathVariable Long id) {
+
+           boolean deleted = leadService.deleteLead(id);
+                if (!deleted) {
+        return ResponseEntity.notFound().build();
+    }
+        return ResponseEntity.noContent().build();
 }
+
 }
