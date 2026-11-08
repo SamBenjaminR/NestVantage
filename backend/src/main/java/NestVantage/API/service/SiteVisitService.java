@@ -12,6 +12,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +33,7 @@ public class SiteVisitService {
 
     @Transactional
     public SiteVisit bookVisit(SiteVisitRequest request) {
+        
 
         Lead lead = leadRepository.findById(request.leadId())
                 .orElseThrow(() ->
@@ -59,6 +63,14 @@ public class SiteVisitService {
         visit.setVisitDate(request.visitDate());
         visit.setVisitTime(request.visitTime());
         visit.setStatus("Booked");
+
+        visit.setLocationUrl(
+    "https://www.google.com/maps/search/?api=1&query="
+    + URLEncoder.encode(
+        request.projectName() + ", Ahmedabad",
+        StandardCharsets.UTF_8
+    )
+);
 
         try {
             return siteVisitRepository.saveAndFlush(visit);

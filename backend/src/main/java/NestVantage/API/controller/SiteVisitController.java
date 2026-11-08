@@ -9,12 +9,14 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/site-visits")
 @CrossOrigin(origins = "http://localhost:5173")
+@PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
 public class SiteVisitController {
 
     private final SiteVisitService siteVisitService;

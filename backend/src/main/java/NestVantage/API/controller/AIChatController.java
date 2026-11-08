@@ -9,11 +9,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
+
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai")
 @CrossOrigin(origins = "http://localhost:5173")
+@PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
 public class AIChatController {
 
     private final GeminiService geminiService;
@@ -83,6 +87,9 @@ public class AIChatController {
                             "reply", reply
                     )
             );
+        } catch (AccessDeniedException exception) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", exception.getMessage()));   
 
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest()

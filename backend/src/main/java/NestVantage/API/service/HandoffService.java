@@ -3,16 +3,19 @@ package NestVantage.API.service;
 
 import NestVantage.API.entity.*;
 import NestVantage.API.repository.*;
-
 import NestVantage.API.service.ai.GeminiService;
+import NestVantage.API.auth.entity.AppUser;
+import NestVantage.API.auth.repository.AppUserRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -27,37 +30,71 @@ public class HandoffService {
     private final LeadRepository leadRepository;
     private final GeminiService geminiService;
     private final HandoffNotificationService notificationService;
+    private final AppUserRepository appUserRepository;
+    private final ConversationPersistenceService conversationPersistenceService;
+    private final PublicConversationService publicConversationService;
 
     public HandoffService(
+            AppUserRepository appUserRepository,
             HandoffRepository handoffRepository,
             HandoffNotificationService notificationService,
             SalesExecutiveRepository executiveRepository,
             ConversationRepository conversationRepository,
             ConversationMessageRepository messageRepository,
             LeadRepository leadRepository,
+            ConversationPersistenceService conversationPersistenceService,
+            PublicConversationService publicConversationService,
             GeminiService geminiService) {
 
+        this.appUserRepository = appUserRepository;
         this.handoffRepository = handoffRepository;
         this.notificationService = notificationService;
         this.executiveRepository = executiveRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.leadRepository = leadRepository;
+        this.conversationPersistenceService = conversationPersistenceService;
+        this.publicConversationService = publicConversationService;
         this.geminiService = geminiService;
     }
 
+    // Existing staff handoff: retains conversation ownership validation.
     @Transactional
     public Handoff requestHandoff(Long conversationId, String phone) {
+
+        validatePhone(phone);
+
+        Conversation conversation =
+                conversationPersistenceService.getAccessibleConversation(
+                        conversationId);
+
+        return createHandoff(conversation, phone.trim());
+    }
+
+    // Public buyer handoff: validates the secure conversation access token.
+    @Transactional
+    public Handoff requestPublicHandoff(
+            String accessToken, String phone) {
+
+        validatePhone(phone);
+
+        Conversation conversation =
+                publicConversationService.getPublicConversation(accessToken);
+
+        return createHandoff(conversation, phone.trim());
+    }
+
+    private void validatePhone(String phone) {
 
         if (phone == null || !phone.trim().matches("^[0-9]{10}$")) {
             throw new IllegalArgumentException(
                     "Phone number must contain exactly 10 digits.");
         }
+    }
 
-        Conversation conversation = conversationRepository
-                .findById(conversationId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Conversation not found."));
+    // Shared handoff creation logic for staff and public conversations.
+    private Handoff createHandoff(
+            Conversation conversation, String phone) {
 
         if (conversation.getBuyerName() == null
                 || conversation.getBuyerName().isBlank()) {
@@ -74,14 +111,14 @@ public class HandoffService {
         }
 
         // Reuse an existing lead or create a new one.
-        Lead lead = leadRepository.findByPhone(phone.trim())
-                .orElseGet(() -> createLead(conversation, phone.trim()));
+        Lead lead = leadRepository.findByPhone(phone)
+                .orElseGet(() -> createLead(conversation, phone));
 
         conversation.setLead(lead);
         conversation.setHandoffRequested(true);
         conversationRepository.save(conversation);
 
-        // Collect conversation history for the sales executive.
+        // Collect conversation history.
         List<ConversationMessage> messages =
                 messageRepository.findByConversationOrderByCreatedAtAsc(
                         conversation);
@@ -103,7 +140,7 @@ public class HandoffService {
                     .append("\n");
         }
 
-        // Generate the summary. Keep handoff working if Gemini is unavailable.
+        // Generate a summary; retain a fallback if Gemini is unavailable.
         String summary;
 
         try {
@@ -135,32 +172,34 @@ public class HandoffService {
             handoff.setStatus("PENDING");
         }
 
-            Handoff savedHandoff = handoffRepository.save(handoff);
+        Handoff savedHandoff = handoffRepository.save(handoff);
 
         notificationService.notifyNewHandoff(
-        savedHandoff.getId(),
-        conversation.getBuyerName(),
-        phone,
-        savedHandoff.getSummary(),
-        savedHandoff.getStatus(),
-        savedHandoff.getSalesExecutive() == null
-                ? "Awaiting assignment"
-                : savedHandoff.getSalesExecutive().getName()
-);
+                savedHandoff.getId(),
+                conversation.getBuyerName(),
+                phone,
+                savedHandoff.getSummary(),
+                savedHandoff.getStatus(),
+                savedHandoff.getSalesExecutive() == null
+                        ? "Awaiting assignment"
+                        : savedHandoff.getSalesExecutive().getName()
+        );
 
-return savedHandoff;
+        return savedHandoff;
     }
 
     @Transactional
     public Handoff acceptHandoff(Long handoffId) {
 
-    Handoff handoff = handoffRepository.findById(handoffId)
-            .orElseThrow(() ->
-                    new IllegalArgumentException("Handoff not found."));
+        Handoff handoff = handoffRepository.findById(handoffId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Handoff not found."));
+
+        verifyHandoffAccess(handoff, getCurrentUser());
 
         if (!"ASSIGNED".equals(handoff.getStatus())) {
-        throw new IllegalArgumentException(
-                "Only assigned handoffs can be accepted.");
+            throw new IllegalArgumentException(
+                    "Only assigned handoffs can be accepted.");
         }
 
         handoff.setStatus("ACCEPTED");
@@ -168,12 +207,14 @@ return savedHandoff;
         return handoffRepository.save(handoff);
     }
 
-     @Transactional
-        public Handoff resolveHandoff(Long handoffId) {
+    @Transactional
+    public Handoff resolveHandoff(Long handoffId) {
 
         Handoff handoff = handoffRepository.findById(handoffId)
-            .orElseThrow(() ->
-                    new IllegalArgumentException("Handoff not found."));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Handoff not found."));
+
+        verifyHandoffAccess(handoff, getCurrentUser());
 
         if (!"ACCEPTED".equals(handoff.getStatus())) {
             throw new IllegalArgumentException(
@@ -185,33 +226,37 @@ return savedHandoff;
 
         return handoffRepository.save(handoff);
     }
-        @Transactional(readOnly = true)
-                public List<Map<String, Object>> getConversationHistory(Long handoffId) {
 
-                Handoff handoff = handoffRepository.findById(handoffId)
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getConversationHistory(
+            Long handoffId) {
+
+        Handoff handoff = handoffRepository.findById(handoffId)
                 .orElseThrow(() ->
-                new IllegalArgumentException("Handoff not found."));
+                        new IllegalArgumentException("Handoff not found."));
+
+        verifyHandoffAccess(handoff, getCurrentUser());
 
         Conversation conversation = handoff.getConversation();
 
         List<ConversationMessage> messages =
-            messageRepository.findByConversationOrderByCreatedAtAsc(
-                    conversation);
+                messageRepository.findByConversationOrderByCreatedAtAsc(
+                        conversation);
 
-                List<Map<String, Object>> result = new ArrayList<>();
+        List<Map<String, Object>> result = new ArrayList<>();
 
         for (ConversationMessage message : messages) {
-        Map<String, Object> item = new HashMap<>();
+            Map<String, Object> item = new HashMap<>();
 
-        item.put("sender", message.getSender());
-        item.put("message", message.getMessage());
-        item.put("createdAt", message.getCreatedAt());
+            item.put("sender", message.getSender());
+            item.put("message", message.getMessage());
+            item.put("createdAt", message.getCreatedAt());
 
-        result.add(item);
+            result.add(item);
+        }
+
+        return result;
     }
-
-    return result;
-}
 
     private Lead createLead(Conversation conversation, String phone) {
 
@@ -231,39 +276,88 @@ return savedHandoff;
 
         return leadRepository.save(lead);
     }
-    @Transactional(readOnly = true)
-        public List<Map<String, Object>> getAllHandoffs() {
 
-        List<Handoff> handoffs =
-            handoffRepository.findAllByOrderByRequestedAtDesc();
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAllHandoffs() {
+
+        AppUser currentUser = getCurrentUser();
+
+        List<Handoff> handoffs;
+
+        if (isManager(currentUser)) {
+            handoffs = handoffRepository.findAllByOrderByRequestedAtDesc();
+        } else if ("SALES_EXECUTIVE".equals(currentUser.getRole())
+                && currentUser.getSalesExecutive() != null) {
+            handoffs = handoffRepository
+                    .findBySalesExecutiveOrderByRequestedAtDesc(
+                            currentUser.getSalesExecutive());
+        } else {
+            handoffs = List.of();
+        }
 
         List<Map<String, Object>> result = new ArrayList<>();
 
-            for (Handoff handoff : handoffs) {
+        for (Handoff handoff : handoffs) {
 
-        Conversation conversation = handoff.getConversation();
+            Conversation conversation = handoff.getConversation();
 
-        Map<String, Object> item = new HashMap<>();
+            Map<String, Object> item = new HashMap<>();
 
-        item.put("handoffId", handoff.getId());
-        item.put("buyerName", conversation.getBuyerName());
-        item.put("phone", conversation.getLead() == null
-                ? ""
-                : conversation.getLead().getPhone());
-        item.put("budget", conversation.getBudget());
-        item.put("requirements", conversation.getRequirements());
-        item.put("language", conversation.getLanguage());
-        item.put("summary", handoff.getSummary());
-        item.put("status", handoff.getStatus());
-        item.put("executiveName",
-                handoff.getSalesExecutive() == null
-                        ? "Awaiting assignment"
-                        : handoff.getSalesExecutive().getName());
-        item.put("requestedAt", handoff.getRequestedAt());
+            item.put("handoffId", handoff.getId());
+            item.put("buyerName", conversation.getBuyerName());
+            item.put("phone", conversation.getLead() == null
+                    ? ""
+                    : conversation.getLead().getPhone());
+            item.put("budget", conversation.getBudget());
+            item.put("requirements", conversation.getRequirements());
+            item.put("language", conversation.getLanguage());
+            item.put("summary", handoff.getSummary());
+            item.put("status", handoff.getStatus());
+            item.put("executiveName",
+                    handoff.getSalesExecutive() == null
+                            ? "Awaiting assignment"
+                            : handoff.getSalesExecutive().getName());
+            item.put("requestedAt", handoff.getRequestedAt());
 
-        result.add(item);
+            result.add(item);
+        }
+
+        return result;
     }
 
-    return result;
+    private AppUser getCurrentUser() {
+
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        return appUserRepository.findByEmail(authentication.getName())
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Authenticated user not found."));
+    }
+
+    private boolean isManager(AppUser user) {
+
+        return "ADMIN".equals(user.getRole())
+                || "SALES_HEAD".equals(user.getRole());
+    }
+
+    private void verifyHandoffAccess(
+            Handoff handoff, AppUser user) {
+
+        if (isManager(user)) {
+            return;
+        }
+
+        if ("SALES_EXECUTIVE".equals(user.getRole())
+                && user.getSalesExecutive() != null
+                && handoff.getSalesExecutive() != null
+                && user.getSalesExecutive().getId()
+                        .equals(handoff.getSalesExecutive().getId())) {
+            return;
+        }
+
+        throw new AccessDeniedException(
+                "You are not authorized to access this handoff.");
     }
 }

@@ -8,6 +8,8 @@ import NestVantage.API.repository.LeadRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -118,6 +120,25 @@ if (leadRepository.existsByPhoneAndIdNot(request.phone(), id)) {
         leadRepository.deleteById(id);
         return true;
     }
+        @Transactional
+        public Optional<Lead> markAsResponded(Long id) {
+
+    Optional<Lead> existingLead = leadRepository.findById(id);
+
+    if (existingLead.isEmpty()) {
+        return Optional.empty();
+    }
+
+    Lead lead = existingLead.get();
+
+    // Preserve the original first-response timestamp.
+    if (lead.getFirstResponseAt() == null) {
+        lead.setFirstResponseAt(LocalDateTime.now());
+        leadRepository.save(lead);
+    }
+
+    return Optional.of(lead);
+}
     
 }
 

@@ -9,13 +9,17 @@ import {
   X,
   Plus,
 } from 'lucide-react'
+
 import {
   getAllLeads,
   getLeadById,
   createLead,
   updateLead,
   deleteLead,
+  markAsResponded,
 } from '../services/leadService'
+
+import { useAuth } from '../context/AuthContext'
 
 const emptyForm = {
   leadCode: '',
@@ -35,131 +39,169 @@ function Leads() {
   const [sourceFilter, setSourceFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
 
+  const { user } = useAuth()
+
   const [showAddForm, setShowAddForm] = useState(false)
   const [formData, setFormData] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+
   const [selectedLead, setSelectedLead] = useState(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [detailsError, setDetailsError] = useState('')
+
   const [editingLead, setEditingLead] = useState(null)
   const [editFormData, setEditFormData] = useState(emptyForm)
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
 
+  const [respondingLeadId, setRespondingLeadId] = useState(null)
 
   async function fetchLeads() {
-  try {
-    setLoading(true)
-    setError('')
+    try {
+      setLoading(true)
+      setError('')
 
-    const data = await getAllLeads()
+      const data = await getAllLeads()
 
-    const formattedLeads = data.map((lead) => ({
-      databaseId: lead.id,
-      id: lead.leadCode,
-      name: lead.buyerName,
-      phone: lead.phone || '',
-      source: lead.source || '',
-      project: lead.projectName || '',
-      configuration: lead.bhkType || '',
-      budget: lead.budget || '',
-      status: lead.status || 'New Lead',
-    }))
+      const formattedLeads = data.map((lead) => ({
+        databaseId: lead.id,
+        id: lead.leadCode,
+        name: lead.buyerName,
+        phone: lead.phone || '',
+        source: lead.source || '',
+        project: lead.projectName || '',
+        configuration: lead.bhkType || '',
+        budget: lead.budget || '',
+        status: lead.status || 'New Lead',
+        firstResponseAt: lead.firstResponseAt,
+      }))
 
-    setLeads(formattedLeads)
-  } catch (err) {
-    console.error('Failed to fetch leads:', err)
-    setError('Unable to load leads. Please check the backend connection.')
-  } finally {
-    setLoading(false)
+      setLeads(formattedLeads)
+    } catch (err) {
+      console.error('Failed to fetch leads:', err)
+      setError('Unable to load leads. Please check the backend connection.')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   async function handleViewLead(databaseId) {
-  try {
-    setEditingLead(null)
-    setEditError('')
-    setDetailsLoading(true)
-    setDetailsError('')
+    try {
+      setEditingLead(null)
+      setEditError('')
+      setDetailsLoading(true)
+      setDetailsError('')
+      setSelectedLead(null)
+
+      const data = await getLeadById(databaseId)
+
+      setSelectedLead(data)
+    } catch (err) {
+      console.error('Failed to fetch lead details:', err)
+      setDetailsError('Unable to load lead details. Please try again.')
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  function handleEditLead(lead) {
+    setEditingLead({
+      ...lead,
+      databaseId: lead.id,
+    })
+
+    setEditFormData({
+      leadCode: lead.leadCode || '',
+      buyerName: lead.buyerName || '',
+      phone: lead.phone || '',
+      source: lead.source || 'Website',
+      projectName: lead.projectName || 'Project 1',
+      bhkType: lead.bhkType || '2 BHK',
+      budget: lead.budget || '',
+    })
+
     setSelectedLead(null)
-
-    const data = await getLeadById(databaseId)
-
-    setSelectedLead(data)
-  } catch (err) {
-    console.error('Failed to fetch lead details:', err)
-    setDetailsError('Unable to load lead details. Please try again.')
-  } finally {
-    setDetailsLoading(false)
   }
-}
 
-function handleEditLead(lead) {
-  setEditingLead({
-    ...lead,
-    databaseId: lead.id,
-  })
+  async function handleUpdateLead(event) {
+    event.preventDefault()
 
-  setEditFormData({
-    leadCode: lead.leadCode || '',
-    buyerName: lead.buyerName || '',
-    phone: lead.phone || '',
-    source: lead.source || 'Website',
-    projectName: lead.projectName || 'Project1',
-    bhkType: lead.bhkType || '2 BHK',
-    budget: lead.budget || '',
-  })
+    try {
+      setEditSaving(true)
+      setEditError('')
 
-  setSelectedLead(null)
-}
+      await updateLead(editingLead.databaseId, editFormData)
 
-async function handleUpdateLead(event) {
-  event.preventDefault()
+      await fetchLeads()
 
-
-  try {
-    setEditSaving(true)
-    setEditError('')
-  
-    await updateLead(editingLead.databaseId, editFormData)
-
-    await fetchLeads()
-
-    const updatedLead = await getLeadById(editingLead.databaseId)
-    setSelectedLead(updatedLead)
-    setEditingLead(null)
-  } catch (err) {
-    console.error('Failed to update lead:', err)
-    setEditError(
-      err.response?.data?.error ||
-      'Unable to update lead. Please try again.'
-    )
-  } finally {
-    setEditSaving(false)
+      const updatedLead = await getLeadById(editingLead.databaseId)
+      setSelectedLead(updatedLead)
+      setEditingLead(null)
+    } catch (err) {
+      console.error('Failed to update lead:', err)
+      setEditError(
+        err.response?.data?.error ||
+        'Unable to update lead. Please try again.'
+      )
+    } finally {
+      setEditSaving(false)
+    }
   }
-}
+
   async function handleDeleteLead(lead) {
-  const confirmed = window.confirm(
-    `Are you sure you want to delete ${lead.name} (${lead.id})? This action cannot be undone.`
-  )
-
-  if (!confirmed) return
-
-  try {
-    await deleteLead(lead.databaseId)
-    setSuccessMessage('Lead deleted successfully.')
-    setSelectedLead(null)
-    await fetchLeads()
-  } catch (err) {
-    console.error('Failed to delete lead:', err)
-    setError(
-      err.response?.data?.error ||
-      'Unable to delete lead. Please try again.'
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${lead.name} (${lead.id})? This action cannot be undone.`
     )
+
+    if (!confirmed) return
+
+    try {
+      await deleteLead(lead.databaseId)
+      setSuccessMessage('Lead deleted successfully.')
+      setSelectedLead(null)
+      await fetchLeads()
+    } catch (err) {
+      console.error('Failed to delete lead:', err)
+      setError(
+        err.response?.data?.error ||
+        'Unable to delete lead. Please try again.'
+      )
+    }
   }
-}
+
+  async function handleMarkAsResponded(lead) {
+    try {
+      setRespondingLeadId(lead.databaseId)
+      setError('')
+      setSuccessMessage('')
+
+      const updatedLead = await markAsResponded(lead.databaseId)
+
+      setLeads((previous) =>
+        previous.map((item) =>
+          item.databaseId === lead.databaseId
+            ? {
+                ...item,
+                firstResponseAt: updatedLead.firstResponseAt,
+              }
+            : item
+        )
+      )
+
+      if (selectedLead?.id === updatedLead.id) {
+        setSelectedLead(updatedLead)
+      }
+
+      setSuccessMessage(`${lead.name} marked as contacted.`)
+    } catch (err) {
+      console.error('Failed to mark lead as responded:', err)
+      setError('Unable to record the response. Please try again.')
+    } finally {
+      setRespondingLeadId(null)
+    }
+  }
 
   useEffect(() => {
     fetchLeads()
@@ -170,14 +212,19 @@ async function handleUpdateLead(event) {
 
     leads.forEach((lead) => {
       if (!lead.phone) return
+
       const phone = lead.phone.replace(/\D/g, '').slice(-10)
-      if (phone) phoneCounts[phone] = (phoneCounts[phone] || 0) + 1
+
+      if (phone) {
+        phoneCounts[phone] = (phoneCounts[phone] || 0) + 1
+      }
     })
 
     return new Set(
       leads
         .filter((lead) => {
           if (!lead.phone) return false
+
           const phone = lead.phone.replace(/\D/g, '').slice(-10)
           return phoneCounts[phone] > 1
         })
@@ -218,6 +265,7 @@ async function handleUpdateLead(event) {
 
   function handleInputChange(event) {
     const { name, value } = event.target
+
     setFormData((previous) => ({
       ...previous,
       [name]: value,
@@ -248,30 +296,36 @@ async function handleUpdateLead(event) {
 
       await fetchLeads()
     } catch (err) {
-    console.error('Failed to create lead:', err)
+      console.error('Failed to create lead:', err)
 
-    if (err.response?.status === 409) {
-      setFormError(
-        err.response?.data?.error ||
-        'This lead already exists.')
-
-    } else if (err.response?.status === 400) {
-      setFormError('Please check the information entered and try again.')
-    } else {
-      setFormError('Unable to add lead. Please check the backend connection.')
-    }
-  } finally {
+      if (err.response?.status === 409) {
+        setFormError(
+          err.response?.data?.error ||
+          'This lead already exists.'
+        )
+      } else if (err.response?.status === 400) {
+        setFormError(
+          'Please check the information entered and try again.'
+        )
+      } else {
+        setFormError(
+          'Unable to add lead. Please check the backend connection.'
+        )
+      }
+    } finally {
       setSaving(false)
     }
   }
 
   return (
-    
     <main className="min-w-0 flex-1 bg-slate-50 p-8">
 
+      {/* Page Header */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Lead Management</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Lead Management
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             Manage and track all your property enquiries.
           </p>
@@ -290,12 +344,14 @@ async function handleUpdateLead(event) {
         </button>
       </div>
 
+      {/* Success Message */}
       {successMessage && (
         <div className="mb-5 rounded-lg bg-green-50 p-4 text-sm text-green-700">
           {successMessage}
         </div>
       )}
 
+      {/* Add Lead Form */}
       {showAddForm && (
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
           <div className="mb-5 flex items-center justify-between">
@@ -465,23 +521,31 @@ async function handleUpdateLead(event) {
         </div>
       )}
 
+      {/* Lead Summary Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">Total Leads</p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-900">{leads.length}</h2>
+          <h2 className="mt-2 text-2xl font-bold text-slate-900">
+            {leads.length}
+          </h2>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">New Leads</p>
-          <h2 className="mt-2 text-2xl font-bold text-blue-600">{newLeads}</h2>
+          <h2 className="mt-2 text-2xl font-bold text-blue-600">
+            {newLeads}
+          </h2>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-sm text-slate-500">Duplicate Records</p>
-          <h2 className="mt-2 text-2xl font-bold text-orange-600">{duplicateCount}</h2>
+          <h2 className="mt-2 text-2xl font-bold text-orange-600">
+            {duplicateCount}
+          </h2>
         </div>
       </div>
 
+      {/* Loading and Error Messages */}
       {loading && (
         <div className="mb-5 rounded-lg bg-blue-50 p-4 text-sm text-blue-700">
           Loading leads from the database...
@@ -494,6 +558,7 @@ async function handleUpdateLead(event) {
         </div>
       )}
 
+      {/* Search and Filters */}
       <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
           <Search size={18} className="shrink-0 text-slate-400" />
@@ -537,15 +602,19 @@ async function handleUpdateLead(event) {
         </button>
       </div>
 
+      {/* Table Count */}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">
           Showing {filteredLeads.length} of {leads.length} records
         </p>
+
         <p className="flex items-center gap-1 text-xs text-orange-600">
-          <Copy size={13} /> {duplicateCount} records flagged as duplicates
+          <Copy size={13} />
+          {duplicateCount} records flagged as duplicates
         </p>
       </div>
 
+      {/* Leads Table */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 p-5">
           <h2 className="font-semibold text-slate-900">All Leads</h2>
@@ -564,7 +633,7 @@ async function handleUpdateLead(event) {
                 <th className="px-5 py-4">Budget</th>
                 <th className="px-5 py-4">Status</th>
                 <th className="px-5 py-4">Duplicate Check</th>
-                <th className="px-5 py-4">Action</th>
+                <th className="px-5 py-4 text-center">Action</th>
               </tr>
             </thead>
 
@@ -573,23 +642,37 @@ async function handleUpdateLead(event) {
                 const isDuplicate = duplicateIds.has(lead.id)
 
                 return (
-                  <tr key={lead.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <tr
+                    key={lead.id}
+                    className="border-t border-slate-100 hover:bg-slate-50"
+                  >
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-900">{lead.name}</p>
-                      <p className="mt-1 text-xs text-slate-400">{lead.id}</p>
+                      <p className="font-semibold text-slate-900">
+                        {lead.name}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {lead.id}
+                      </p>
                       <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                        <Phone size={12} /> {lead.phone || 'Not provided'}
+                        <Phone size={12} />
+                        {lead.phone || 'Not provided'}
                       </p>
                     </td>
 
-                    <td className="px-5 py-4 text-slate-600">{lead.source}</td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {lead.source}
+                    </td>
 
                     <td className="px-5 py-4 text-slate-600">
                       {lead.configuration}
-                      <p className="mt-1 text-xs text-slate-400">{lead.project}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {lead.project}
+                      </p>
                     </td>
 
-                    <td className="px-5 py-4 text-slate-600">{lead.budget}</td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {lead.budget}
+                    </td>
 
                     <td className="px-5 py-4">
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
@@ -603,26 +686,49 @@ async function handleUpdateLead(event) {
                           Duplicate
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-500">Not detected</span>
+                        <span className="text-xs text-slate-500">
+                          Not detected
+                        </span>
                       )}
                     </td>
 
+                    {/* Action Column */}
                     <td className="px-5 py-4">
-                      <button
-                       title="View lead"
-                       onClick={() => handleViewLead(lead.databaseId)}
-                       className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                        >
-                        <Eye size={18} />
-                      </button>
+                      <div className="flex items-center justify-center gap-3">
 
-                      <button
-                        title="Delete lead"
-                        onClick={() => handleDeleteLead(lead)}
-                        className="rounded-lg  p-2 text-red-600 hover:bg-red-50"
+                        {!lead.firstResponseAt && (
+                          <button
+                            title="Mark as Responded"
+                            onClick={() => handleMarkAsResponded(lead)}
+                            disabled={respondingLeadId === lead.databaseId}
+                            className="rounded-lg border border-emerald-400/70 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-300 hover:bg-emerald-500/15 disabled:opacity-50"
+                          >
+                            {respondingLeadId === lead.databaseId
+                              ? 'Saving...'
+                              : 'Mark Responded'}
+                          </button>
+                        )}
+
+                        <button
+                          title="View lead"
+                          onClick={() => handleViewLead(lead.databaseId)}
+                          className="rounded-lg p-2 text-blue-400 transition-colors hover:bg-blue-500/15"
                         >
-                        <Trash2 size={18} />
-                      </button>
+                          <Eye size={18} />
+                        </button>
+
+                        {(user?.role === 'ADMIN' ||
+                          user?.role === 'SALES_HEAD') && (
+                          <button
+                            title="Delete lead"
+                            onClick={() => handleDeleteLead(lead)}
+                            className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-500/15"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+
+                      </div>
                     </td>
                   </tr>
                 )
@@ -630,7 +736,10 @@ async function handleUpdateLead(event) {
 
               {!loading && !error && filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="px-5 py-12 text-center text-sm text-slate-500">
+                  <td
+                    colSpan="7"
+                    className="px-5 py-12 text-center text-sm text-slate-500"
+                  >
                     No leads found. Try changing your search or filters.
                   </td>
                 </tr>
@@ -639,306 +748,315 @@ async function handleUpdateLead(event) {
           </table>
         </div>
       </div>
-              {/* Edit Lead Form */}
-{editingLead && (
-  <div className="mb-6 rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
-    <div className="mb-5 flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">
-          Edit Lead
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Update the buyer's information.
-        </p>
-      </div>
 
-      <button
-        onClick={() => {
-          setEditingLead(null)
-          setEditError('')
-        }}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-        aria-label="Close edit form"
-      >
-        <X size={20} />
-      </button>
-    </div>
+      {/* Edit Lead Form */}
+      {editingLead && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Edit Lead
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Update the buyer's information.
+              </p>
+            </div>
 
-    <form onSubmit={handleUpdateLead}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <button
+              onClick={() => {
+                setEditingLead(null)
+                setEditError('')
+              }}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              aria-label="Close edit form"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Lead Code
-          </label>
-          <input
-            type="text"
-            value={editFormData.leadCode}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              leadCode: e.target.value
-            })}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
+          <form onSubmit={handleUpdateLead}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Lead Code
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.leadCode}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      leadCode: e.target.value,
+                    })
+                  }
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Buyer Name
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.buyerName}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      buyerName: e.target.value,
+                    })
+                  }
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Phone Number
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.phone}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      phone: e.target.value,
+                    })
+                  }
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Lead Source
+                </label>
+                <select
+                  value={editFormData.source}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      source: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="Website">Website</option>
+                  <option value="Property Portal">Property Portal</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Hoarding Call">Hoarding Call</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Project
+                </label>
+                <select
+                  value={editFormData.projectName}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      projectName: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="Project 1">Project 1</option>
+                  <option value="Project 2">Project 2</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Configuration
+                </label>
+                <select
+                  value={editFormData.bhkType}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      bhkType: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="2 BHK">2 BHK</option>
+                  <option value="3 BHK">3 BHK</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Budget
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.budget}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      budget: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. 65L - 80L"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </div>
+
+            </div>
+
+            {editError && (
+              <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                {editError}
+              </p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingLead(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
         </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Buyer Name
-          </label>
-          <input
-            type="text"
-            value={editFormData.buyerName}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              buyerName: e.target.value
-            })}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Phone Number
-          </label>
-          <input
-            type="text"
-            value={editFormData.phone}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              phone: e.target.value
-            })}
-            pattern="[0-9]{10}"
-            maxLength={10}
-            required
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Lead Source
-          </label>
-          <select
-            value={editFormData.source}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              source: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="Website">Website</option>
-            <option value="Property Portal">Property Portal</option>
-            <option value="Social Media">Social Media</option>
-            <option value="Hoarding Call">Hoarding Call</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Project
-          </label>
-          <select
-            value={editFormData.projectName}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              projectName: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="Project 1">Project 1</option>
-            <option value="Project 2">Project 2</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Configuration
-          </label>
-          <select
-            value={editFormData.bhkType}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              bhkType: e.target.value
-            })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          >
-            <option value="2 BHK">2 BHK</option>
-            <option value="3 BHK">3 BHK</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Budget
-          </label>
-          <input
-            type="text"
-            value={editFormData.budget}
-            onChange={(e) => setEditFormData({
-              ...editFormData,
-              budget: e.target.value
-            })}
-            placeholder="e.g. 65L - 80L"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-          />
-        </div>
-
-      </div>
-
-      {editError && (
-        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          {editError}
-        </p>
       )}
 
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => setEditingLead(null)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Cancel
-        </button>
+      {/* Lead Details Panel */}
+      {(detailsLoading || detailsError || selectedLead) && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
 
-        <button
-          type="submit"
-          disabled={editSaving}
-          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {editSaving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-    </form>
-  </div>
-)}
-      
-{/* Lead Details Panel */}
-{(detailsLoading || detailsError || selectedLead) && (
-  <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Lead Details
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Complete information retrieved from the database.
+              </p>
+            </div>
 
-    {/* <div className="mb-5 flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">
-          Lead Details
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Complete information retrieved from the database.
-        </p>
-      </div> */}
-      <div className="mb-5 flex items-center justify-between">
-  <div>
-    <h2 className="text-lg font-semibold text-slate-900">Lead Details</h2>
-    <p className="mt-1 text-sm text-slate-500">
-      Complete information retrieved from the database.
-    </p>
-  </div>
+            <div className="flex items-center gap-2">
+              {selectedLead && (
+                <button
+                  onClick={() => handleEditLead(selectedLead)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Edit Lead
+                </button>
+              )}
 
-  <div className="flex items-center gap-2">
-    {selectedLead && (
-      <button
-        onClick={() => handleEditLead(selectedLead)}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-      >
-        Edit Lead
-      </button>
-    )}
-</div>
-
-      <button
-        onClick={() => {
-          setSelectedLead(null)
-          setDetailsError('')
-        }}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-        aria-label="Close lead details"
-      >
-        <X size={20} />
-      </button>
-    </div>
-
-    {detailsLoading && (
-      <p className="text-sm text-blue-600">
-        Loading lead details...
-      </p>
-    )}
-
-    {detailsError && (
-      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-        {detailsError}
-      </p>
-    )}
-
-    {selectedLead && (
-      <>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-bold text-slate-900">
-              {selectedLead.buyerName}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              {selectedLead.leadCode}
-            </p>
+              <button
+                onClick={() => {
+                  setSelectedLead(null)
+                  setDetailsError('')
+                }}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                aria-label="Close lead details"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
-          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
-            {selectedLead.status}
-          </span>
+          {detailsLoading && (
+            <p className="text-sm text-blue-600">
+              Loading lead details...
+            </p>
+          )}
+
+          {detailsError && (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {detailsError}
+            </p>
+          )}
+
+          {selectedLead && (
+            <>
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {selectedLead.buyerName}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedLead.leadCode}
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
+                  {selectedLead.status}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Phone Number</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.phone || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Lead Source</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.source || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Project</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.projectName || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Configuration</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.bhkType || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Budget</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.budget || 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs text-slate-500">Created At</p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {selectedLead.createdAt
+                      ? new Date(selectedLead.createdAt).toLocaleString()
+                      : 'Not available'}
+                  </p>
+                </div>
+
+              </div>
+            </>
+          )}
         </div>
+      )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Phone Number</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.phone || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Lead Source</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.source || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Project</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.projectName || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Configuration</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.bhkType || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Budget</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.budget || 'Not provided'}
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-xs text-slate-500">Created At</p>
-            <p className="mt-2 font-medium text-slate-900">
-              {selectedLead.createdAt
-                ? new Date(selectedLead.createdAt).toLocaleString()
-                : 'Not available'}
-            </p>
-          </div>
-
-        </div>
-      </>
-    )}
-  </div>
-)}
     </main>
   )
 }

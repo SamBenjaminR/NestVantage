@@ -1,9 +1,10 @@
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axiosConfig';
 import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const API = 'http://localhost:8080/api/property-fact-sheets';
+const API = '/property-fact-sheets';
 
 const emptyForm = {
   projectName: '',
@@ -16,6 +17,11 @@ const emptyForm = {
 };
 
 export default function PropertyFactSheets() {
+
+  const { user } = useAuth();
+
+  const isManager =
+    user?.role === 'ADMIN' || user?.role === 'SALES_HEAD';
   const [facts, setFacts] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -28,7 +34,8 @@ export default function PropertyFactSheets() {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get(API);
+      const endpoint = isManager ? API : `${API}/active`;
+        const response = await api.get(endpoint);
       setFacts(response.data);
     } catch {
       setError('Unable to load property fact sheets.');
@@ -67,9 +74,9 @@ export default function PropertyFactSheets() {
       setError('');
 
       if (editingId) {
-        await axios.put(`${API}/${editingId}`, form);
+        await api.put(`${API}/${editingId}`, form);
       } else {
-        await axios.post(API, form);
+        await api.post(API, form);
       }
 
       setForm(emptyForm);
@@ -87,7 +94,7 @@ export default function PropertyFactSheets() {
     if (!window.confirm('Delete this property fact sheet?')) return;
 
     try {
-      await axios.delete(`${API}/${id}`);
+      await api.delete(`${API}/${id}`);
       await loadFacts();
     } catch {
       setError('Unable to delete property fact sheet.');
@@ -113,22 +120,25 @@ export default function PropertyFactSheets() {
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={loadFacts}
-            className="flex items-center gap-2 px-4 py-2 border rounded-lg"
-          >
-            <RefreshCw size={16} /> Refresh
-          </button>
-          <button
-            onClick={() => {
-              setForm(emptyForm);
-              setEditingId(null);
-              setShowForm(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg"
-          >
-            <Plus size={16} /> Add Project
-          </button>
+      <button
+        onClick={loadFacts}
+          className="flex items-center gap-2 px-4 py-2 border rounded-lg"
+      >
+        <RefreshCw size={16} /> Refresh
+      </button>
+
+    {isManager && (
+    <button
+      onClick={() => {
+        setForm(emptyForm);
+        setEditingId(null);
+        setShowForm(true);
+      }}
+      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg"
+      >
+      <Plus size={16} /> Add Project
+      </button>
+      )}
         </div>
       </div>
 
@@ -138,7 +148,7 @@ export default function PropertyFactSheets() {
         </div>
       )}
 
-      {showForm && (
+      {isManager && showForm && (
         <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-semibold">
             {editingId ? 'Edit Property Fact Sheet' : 'Add Property Fact Sheet'}
@@ -242,20 +252,23 @@ export default function PropertyFactSheets() {
               <p className="text-sm"><strong>Amenities:</strong> {fact.amenities || 'Not specified'}</p>
               <p className="text-sm text-gray-600">{fact.description}</p>
 
+              {isManager && (
               <div className="flex gap-2 pt-2">
-                <button
+              <button
                   onClick={() => handleEdit(fact)}
                   className="flex items-center gap-2 px-3 py-2 border rounded-lg text-sm"
                 >
-                  <Pencil size={15} /> Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(fact.id)}
-                  className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm"
-                >
-                  <Trash2 size={15} /> Delete
+                <Pencil size={15} /> Edit
+              </button>
+
+              <button
+                onClick={() => handleDelete(fact.id)}
+                className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm"
+              >
+                <Trash2 size={15} /> Delete
                 </button>
               </div>
+            )}
             </div>
           ))}
         </div>

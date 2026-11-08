@@ -48,6 +48,8 @@ public class Lead {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+        @Column(name = "first_response_at")
+    private LocalDateTime firstResponseAt;
 
     // Automatically set the creation time before saving.
     @PrePersist
@@ -132,5 +134,12 @@ public class Lead {
 
     public void setBudget(String budget) {
     this.budget = budget;
+    }
+    public LocalDateTime getFirstResponseAt() {
+    return firstResponseAt;
+}
+
+    public void setFirstResponseAt(LocalDateTime firstResponseAt) {
+    this.firstResponseAt = firstResponseAt;
     }
 }

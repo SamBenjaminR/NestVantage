@@ -1,3 +1,4 @@
+
 package NestVantage.API.entity;
 
 import jakarta.persistence.*;
@@ -31,10 +32,17 @@ public class SiteVisit {
     @Column(nullable = false)
     private String status = "Booked";
 
+    @Column(name = "location_url", length = 500)
+    private String locationUrl;
+
+    @Column(name = "reminder_24h_sent", nullable = false)
+private boolean reminder24hSent = false;
+
+@Column(name = "reminder_2h_sent", nullable = false)
+private boolean reminder2hSent = false;
+
     public SiteVisit() {
     }
-
-    // Getters and setters
 
     public Long getId() {
         return id;
@@ -91,4 +99,27 @@ public class SiteVisit {
     public void setStatus(String status) {
         this.status = status;
     }
+
+    public String getLocationUrl() {
+        return locationUrl;
+    }
+
+    public void setLocationUrl(String locationUrl) {
+        this.locationUrl = locationUrl;
+    }
+    public boolean isReminder24hSent() {
+    return reminder24hSent;
+}
+
+public void setReminder24hSent(boolean reminder24hSent) {
+    this.reminder24hSent = reminder24hSent;
+}
+
+public boolean isReminder2hSent() {
+    return reminder2hSent;
+}
+
+public void setReminder2hSent(boolean reminder2hSent) {
+    this.reminder2hSent = reminder2hSent;
+}
 }

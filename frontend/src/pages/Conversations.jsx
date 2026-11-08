@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import axios from 'axios'
+import api from '../api/axiosConfig'
 import {
   Bot,
   User,
@@ -84,7 +84,7 @@ function Conversations() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post('http://localhost:8080/api/ai/chat', {
+      const response = await api.post('/ai/chat', {
         message: cleanMessage,
         conversationId,
         buyerName: buyerName.trim() || null,
@@ -162,13 +162,10 @@ async function requestHuman() {
   ])
 
   try {
-    const response = await axios.post(
-      'http://localhost:8080/api/handoffs',
-      {
-        conversationId,
-        phone: phone.trim(),
-      }
-    )
+    const response = await api.post('/handoffs', {
+      conversationId,
+          phone: phone.trim(),
+        })
 
     const { status, executiveName } = response.data
 

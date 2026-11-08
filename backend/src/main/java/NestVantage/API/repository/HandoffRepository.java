@@ -22,4 +22,7 @@ public interface HandoffRepository extends JpaRepository<Handoff, Long> {
             SalesExecutive salesExecutive,
             String status
     );
+        List<Handoff> findBySalesExecutiveOrderByRequestedAtDesc(
+            SalesExecutive salesExecutive
+    );
 }

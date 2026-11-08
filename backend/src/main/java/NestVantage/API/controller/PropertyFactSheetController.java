@@ -5,6 +5,7 @@ import NestVantage.API.service.PropertyFactSheetService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -20,17 +21,20 @@ public class PropertyFactSheetController {
     }
 
     @GetMapping
-    public List<PropertyFactSheet> getAll() {
+       @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
+        public List<PropertyFactSheet> getAll() {
         return service.getAllFactSheets();
     }
 
     @GetMapping("/active")
-    public List<PropertyFactSheet> getActive() {
+        @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
+        public List<PropertyFactSheet> getActive() {
         return service.getActiveFactSheets();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable Long id) {
+        @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
+        public ResponseEntity<?> getById(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(service.getFactSheet(id));
         } catch (IllegalArgumentException e) {
@@ -40,6 +44,7 @@ public class PropertyFactSheetController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
     public ResponseEntity<?> create(@RequestBody PropertyFactSheet factSheet) {
         try {
             return ResponseEntity.status(HttpStatus.CREATED)
@@ -50,6 +55,7 @@ public class PropertyFactSheetController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
     public ResponseEntity<?> update(
             @PathVariable Long id,
             @RequestBody PropertyFactSheet factSheet) {
@@ -61,6 +67,7 @@ public class PropertyFactSheetController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
             service.deleteFactSheet(id);
@@ -70,4 +77,5 @@ public class PropertyFactSheetController {
                     .body(e.getMessage());
         }
     }
+    
 }

@@ -1,30 +1,35 @@
-import axios from 'axios';
 
-// Base URL of our Spring Boot backend
-const API_URL = 'http://localhost:8080/api/leads';
+import api from '../api/axiosConfig'
 
-// Retrieve all leads from the backend
+const API_URL = '/leads'
+
+
 export const getAllLeads = async () => {
-    const response = await axios.get(API_URL);
-    return response.data;
-};
-
-// Retrieve one lead using its database ID
-export const getLeadById = async (id) => {
-    const response = await axios.get(`${API_URL}/${id}`);
-    return response.data;
-};
-
-// Create a new lead
-export const createLead = async (leadData) => {
-    const response = await axios.post(API_URL, leadData);
-    return response.data;
-};
-export const updateLead = async (id, leadData) => {
-  const response = await axios.put(`${API_URL}/${id}`, leadData)
-  return response.data
+    const response = await api.get(API_URL)
+    return response.data
 }
-// Delete a lead
+
+export const getLeadById = async (id) => {
+    const response = await api.get(`${API_URL}/${id}`)
+    return response.data
+}
+
+export const createLead = async (leadData) => {
+    const response = await api.post(API_URL, leadData)
+    return response.data
+}
+
+export const updateLead = async (id, leadData) => {
+    const response = await api.put(`${API_URL}/${id}`, leadData)
+    return response.data
+}
+
+
 export const deleteLead = async (id) => {
-  await axios.delete(`${API_URL}/${id}`)
+    await api.delete(`${API_URL}/${id}`)
+}
+
+export const markAsResponded = async (id) => {
+    const response = await api.patch(`${API_URL}/${id}/responded`)
+    return response.data
 }

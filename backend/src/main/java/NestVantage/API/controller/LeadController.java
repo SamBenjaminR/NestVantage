@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/leads")
 @CrossOrigin(origins = "http://localhost:5173")
+@PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
 public class LeadController {
 
     private final LeadService leadService;
@@ -79,6 +81,7 @@ public class LeadController {
         }
         // DELETE /api/leads/{id}
         @DeleteMapping("/{id}")
+        @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD')")
             public ResponseEntity<Void> deleteLead(@PathVariable Long id) {
 
            boolean deleted = leadService.deleteLead(id);
@@ -86,6 +89,14 @@ public class LeadController {
         return ResponseEntity.notFound().build();
     }
         return ResponseEntity.noContent().build();
-}
+    }
+                // PATCH /api/leads/{id}/responded
+    @PatchMapping("/{id}/responded")
+    public ResponseEntity<Lead> markAsResponded(@PathVariable Long id) {
+
+        return leadService.markAsResponded(id)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
+    }
 
 }

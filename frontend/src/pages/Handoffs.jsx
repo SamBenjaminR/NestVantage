@@ -1,10 +1,10 @@
 
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '../api/axiosConfig'
 import ReactMarkdown from 'react-markdown'
 import { Handshake, RefreshCw, Phone, User, Clock } from 'lucide-react'
 
-const API_URL = 'http://localhost:8080/api/handoffs'
+const API_URL = '/handoffs'
 
 function Handoffs() {
   const [handoffs, setHandoffs] = useState([])
@@ -16,17 +16,19 @@ function Handoffs() {
   const [conversationMessages, setConversationMessages] = useState([])
   const [conversationLoading, setConversationLoading] = useState(false)
 
-  const fetchHandoffs = async () => {
-    try {
-      setError('')
-      const response = await axios.get(API_URL)
-      setHandoffs(response.data)
-    } catch (err) {
-      setError('Unable to load handoff requests. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      const fetchHandoffs = async () => {
+  try {
+    setLoading(true)
+    setError('')
+
+    const response = await api.get(API_URL)
+    setHandoffs(response.data)
+  } catch (err) {
+    setError('Unable to load handoff requests. Please try again.')
+  } finally {
+    setLoading(false)
   }
+}
 
   useEffect(() => {
     fetchHandoffs()
@@ -37,7 +39,7 @@ function Handoffs() {
       setActionLoading(handoffId)
       setError('')
 
-      await axios.post(`${API_URL}/${handoffId}/${action}`)
+      await api.post(`${API_URL}/${handoffId}/${action}`)
       await fetchHandoffs()
     } catch (err) {
       setError(
@@ -54,7 +56,7 @@ function Handoffs() {
     setConversationLoading(true)
 
     try {
-    const response = await axios.get(
+    const response = await api.get(
       `${API_URL}/${handoff.handoffId}/messages`
     )
     setConversationMessages(response.data)
@@ -87,12 +89,12 @@ function Handoffs() {
           <div>
             <div className="flex items-center gap-3">
               <Handshake size={28} className="text-blue-600" />
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
                 Sales Handoffs
               </h1>
             </div>
 
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">
               Manage buyer requests transferred from the AI assistant.
             </p>
           </div>
@@ -197,7 +199,7 @@ function Handoffs() {
                     AI Conversation Summary
                   </p>
 
-                <div className="mt-2 rounded-lg border border-slate-200 p-4 text-sm leading-relaxed text-slate-600 [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_strong]:font-semibold [&_strong]:text-slate-800">
+                <div className="mt-2 rounded-lg border border-slate-200 bg-white p-4 text-sm leading-relaxed text-black dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 [&_strong]:font-bold [&_strong]:text-black dark:[&_strong]:text-white">
                 <ReactMarkdown>
                     {handoff.summary || 'No summary available.'}
                  </ReactMarkdown>

@@ -1,27 +1,37 @@
 
-import axios from 'axios'
+import api from '../api/axiosConfig'
 
-const API_URL = 'http://localhost:8080/api/site-visits'
+const API_URL = '/site-visits'
+const SLOT_API_URL = '/booking-slots'
 
+// Site visit bookings
 export const getAllBookings = async () => {
-  const response = await axios.get(API_URL)
+  const response = await api.get(API_URL)
   return response.data
 }
 
 export const getVisitHistory = async () => {
-  const response = await axios.get(`${API_URL}/history`)
+  const response = await api.get(`${API_URL}/history`)
   return response.data
 }
 
 export const createBooking = async (bookingData) => {
-  const response = await axios.post(API_URL, bookingData)
+  const response = await api.post(API_URL, bookingData)
   return response.data
 }
 
 export const cancelBooking = async (id) => {
-  await axios.delete(`${API_URL}/${id}`)
+  await api.delete(`${API_URL}/${id}`)
 }
 
 export const updateVisitStatus = async (id, status) => {
-  await axios.patch(`${API_URL}/${id}/status`, { status })
+  await api.patch(`${API_URL}/${id}/status`, { status })
+}
+
+// Booking slot management
+export const getActiveSlotsByProject = async (projectName) => {
+  const response = await api.get(
+    `${SLOT_API_URL}/project/${encodeURIComponent(projectName)}`
+  )
+  return response.data
 }

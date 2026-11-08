@@ -10,42 +10,195 @@ import {
   BarChart3,
   RefreshCw,
   XCircle,
+  Timer,
+  Headset,
+  IndianRupee,
 } from 'lucide-react'
 
 import { getAllLeads } from '../services/leadService'
 import { getVisitHistory } from '../services/siteVisitService'
+import {
+  getResponseTimeAnalytics,
+  getCostPerVisitAnalytics,
+} from '../services/analyticsService'
+
+function getCurrentMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function formatResponseTime(seconds) {
+  if (!seconds) return '0 sec'
+
+  if (seconds < 60) return `${Math.round(seconds)} sec`
+
+  if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = Math.round(seconds % 60)
+
+    return remainingSeconds
+      ? `${minutes} min ${remainingSeconds} sec`
+      : `${minutes} min`
+  }
+
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  return `${hours} hr ${minutes} min`
+}
+
+function formatCurrency(amount) {
+  if (amount === null || amount === undefined) return 'N/A'
+
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(Number(amount))
+}
+
+function ResponseTimeSection({
+  title,
+  description,
+  averageSeconds,
+  responseCount,
+  sourceData,
+  countLabel,
+  emptyMessage,
+  icon: Icon,
+  iconColor,
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Icon size={20} className={iconColor} />
+        <h2 className="font-semibold text-slate-900">
+          {title}
+        </h2>
+      </div>
+
+      <p className="mt-1 text-sm text-slate-500">
+        {description}
+      </p>
+
+      <div className="mt-5 flex flex-wrap items-end gap-4">
+        <p className="text-3xl font-bold text-slate-900">
+          {formatResponseTime(averageSeconds)}
+        </p>
+
+        <p className="pb-1 text-sm text-slate-400">
+          Based on {responseCount || 0} {countLabel}
+        </p>
+      </div>
+
+      {sourceData.length > 0 ? (
+        <div className="mt-6 border-t border-slate-100 pt-5">
+          <h3 className="text-sm font-semibold text-slate-700">
+            First Response Time by Lead Source
+          </h3>
+
+          <div className="mt-4 space-y-4">
+            {sourceData.map(item => (
+              <div
+                key={item.source}
+                className="flex flex-wrap items-center justify-between gap-2"
+              >
+                <span className="text-sm font-medium text-slate-700">
+                  {item.source}
+                </span>
+
+                <div className="text-right">
+                  <span className="text-sm font-semibold text-slate-900">
+                    {formatResponseTime(item.averageResponseSeconds)}
+                  </span>
+
+                  <span className="ml-2 text-xs text-slate-400">
+                    ({item.responseCount} {countLabel})
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-slate-400">
+          {emptyMessage}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function Analytics() {
   const [leads, setLeads] = useState([])
   const [visits, setVisits] = useState([])
+
+  const [responseAnalytics, setResponseAnalytics] = useState({
+    averageResponseSeconds: 0,
+    responseCount: 0,
+    bySource: [],
+    averageHumanResponseSeconds: 0,
+    humanResponseCount: 0,
+    humanBySource: [],
+  })
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth)
+
+  const [costAnalytics, setCostAnalytics] = useState({
+    month: getCurrentMonth(),
+    bySource: [],
+  })
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const loadAnalytics = async () => {
-    try {
-      setLoading(true)
-      setError('')
-
-      const [leadData, visitData] = await Promise.all([
-        getAllLeads(),
-        getVisitHistory(),
-      ])
-
-      setLeads(leadData)
-      setVisits(visitData)
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-        'Unable to load analytics. Please check whether the backend is running.'
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    let cancelled = false
+
+    async function loadAnalytics() {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [
+          leadData,
+          visitData,
+          responseData,
+          costData,
+        ] = await Promise.all([
+          getAllLeads(),
+          getVisitHistory(),
+          getResponseTimeAnalytics(),
+          getCostPerVisitAnalytics(selectedMonth),
+        ])
+
+        if (cancelled) return
+
+        setLeads(leadData)
+        setVisits(visitData)
+        setResponseAnalytics(responseData)
+        setCostAnalytics(costData)
+      } catch (err) {
+        if (cancelled) return
+
+        setError(
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          'Unable to load analytics. Please check whether the backend is running.'
+        )
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
     loadAnalytics()
-  }, [])
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedMonth])
 
   const totalLeads = leads.length
   const totalVisits = visits.length
@@ -53,29 +206,25 @@ function Analytics() {
   const booked = visits.filter(v => v.status === 'Booked').length
   const completed = visits.filter(v => v.status === 'Completed').length
   const noShow = visits.filter(v => v.status === 'No Show').length
-  const cancelled = visits.filter(v => v.status === 'Cancelled').length
+  const cancelledVisits = visits.filter(v => v.status === 'Cancelled').length
 
-  // Show-up rate excludes bookings that are still pending or cancelled.
   const decidedVisits = completed + noShow
+
   const showUpRate = decidedVisits > 0
     ? Math.round((completed / decidedVisits) * 100)
     : 0
 
-  // Percentage of leads that have at least one site visit.
-      const leadsWithVisits = new Set(
-  visits
-    .filter(v =>
-      ['Booked', 'Completed'].includes(v.status)
-    )
-    .map(v => v.lead?.id)
-    .filter(Boolean)
-    ).size
+  const leadsWithVisits = new Set(
+    visits
+      .filter(v => ['Booked', 'Completed'].includes(v.status))
+      .map(v => v.lead?.id)
+      .filter(Boolean)
+  ).size
 
   const visitConversion = totalLeads > 0
     ? Math.round((leadsWithVisits / totalLeads) * 100)
     : 0
 
-  // Group leads by their acquisition source.
   const sourceCounts = leads.reduce((result, lead) => {
     const source = lead.source || 'Unknown'
     result[source] = (result[source] || 0) + 1
@@ -89,6 +238,10 @@ function Analytics() {
     ...sourceData.map(([, count]) => count),
     1
   )
+
+  const aiResponseSourceData = responseAnalytics.bySource || []
+  const humanResponseSourceData = responseAnalytics.humanBySource || []
+  const costSourceData = costAnalytics.bySource || []
 
   const metrics = [
     {
@@ -138,8 +291,9 @@ function Analytics() {
 
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5">
           <p className="text-red-700">{error}</p>
+
           <button
-            onClick={loadAnalytics}
+            onClick={() => window.location.reload()}
             className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
           >
             Try Again
@@ -150,23 +304,26 @@ function Analytics() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
+
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
             Analytics
           </h1>
+
           <p className="mt-1 text-sm text-slate-500">
             Lead and site-visit performance overview
           </p>
+
           <p className="mt-1 text-xs text-slate-400">
             Based on records currently stored in the database
           </p>
         </div>
 
         <button
-          onClick={loadAnalytics}
+          onClick={() => window.location.reload()}
           className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           <RefreshCw size={16} />
@@ -176,7 +333,7 @@ function Analytics() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => {
+        {metrics.map(metric => {
           const Icon = metric.icon
 
           return (
@@ -188,6 +345,7 @@ function Analytics() {
                 <p className="text-sm font-medium text-slate-500">
                   {metric.title}
                 </p>
+
                 <div className={`rounded-lg p-2 ${metric.color}`}>
                   <Icon size={20} />
                 </div>
@@ -205,22 +363,124 @@ function Analytics() {
         })}
       </div>
 
+      {/* AI Response Time */}
+      <ResponseTimeSection
+        title="Average AI First Response Time"
+        description="Time between a buyer's first message and the first AI reply"
+        averageSeconds={responseAnalytics.averageResponseSeconds}
+        responseCount={responseAnalytics.responseCount}
+        sourceData={aiResponseSourceData}
+        countLabel="conversations"
+        emptyMessage="No linked conversations with response data available yet."
+        icon={Timer}
+        iconColor="text-blue-600"
+      />
+
+      {/* Human Response Time */}
+      <ResponseTimeSection
+        title="Average Human First Response Time"
+        description="Time between lead creation and the first recorded sales response"
+        averageSeconds={responseAnalytics.averageHumanResponseSeconds}
+        responseCount={responseAnalytics.humanResponseCount}
+        sourceData={humanResponseSourceData}
+        countLabel="leads"
+        emptyMessage="No leads have a recorded human response yet. Use Mark as Responded on a lead to start tracking."
+        icon={Headset}
+        iconColor="text-purple-600"
+      />
+
+      {/* Cost per Completed Visit */}
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <IndianRupee size={20} className="text-green-600" />
+
+              <h2 className="font-semibold text-slate-900">
+                Cost per Completed Visit by Source
+              </h2>
+            </div>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Monthly marketing spend divided by completed site visits
+            </p>
+          </div>
+
+          <input
+            type="month"
+            value={selectedMonth}
+            max={getCurrentMonth()}
+            onChange={event => setSelectedMonth(event.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div className="mt-5 overflow-x-auto">
+          {costSourceData.length === 0 ? (
+            <p className="py-5 text-sm text-slate-400">
+              No marketing spend or completed visit data available for this month.
+            </p>
+          ) : (
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="pb-3 font-medium">Lead Source</th>
+                  <th className="pb-3 font-medium">Marketing Spend</th>
+                  <th className="pb-3 font-medium">Completed Visits</th>
+                  <th className="pb-3 font-medium">Cost per Visit</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {costSourceData.map(item => (
+                  <tr
+                    key={item.source}
+                    className="border-b border-slate-100 last:border-0"
+                  >
+                    <td className="py-3 font-medium text-slate-700">
+                      {item.source}
+                    </td>
+
+                    <td className="py-3 text-slate-600">
+                      {formatCurrency(item.marketingSpend)}
+                    </td>
+
+                    <td className="py-3 text-slate-600">
+                      {item.completedVisits ?? 0}
+                    </td>
+
+                    <td className="py-3 font-semibold text-slate-900">
+                      {formatCurrency(item.costPerVisit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <p className="mt-4 text-xs text-slate-400">
+          N/A means marketing spend has not been entered or there are no completed visits for that source.
+        </p>
+      </div>
+
       {/* Visit Outcomes and Conversion */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-semibold text-slate-900">
             Site Visit Outcomes
           </h2>
+
           <p className="mt-1 text-sm text-slate-500">
             Breakdown of all recorded visits
           </p>
 
           <div className="mt-6 space-y-5">
             {[
-              { label: 'Booked', value: booked, icon: Clock, color: 'bg-blue-500' },
-              { label: 'Completed', value: completed, icon: CheckCircle2, color: 'bg-green-500' },
-              { label: 'No Show', value: noShow, icon: UserX, color: 'bg-orange-500' },
-              { label: 'Cancelled', value: cancelled, icon: XCircle, color: 'bg-red-500' },
+              { label: 'Booked', value: booked, color: 'bg-blue-500' },
+              { label: 'Completed', value: completed, color: 'bg-green-500' },
+              { label: 'No Show', value: noShow, color: 'bg-orange-500' },
+              { label: 'Cancelled', value: cancelledVisits, color: 'bg-red-500' },
             ].map(item => {
               const percentage = totalVisits > 0
                 ? (item.value / totalVisits) * 100
@@ -232,6 +492,7 @@ function Analytics() {
                     <span className="font-medium text-slate-700">
                       {item.label}
                     </span>
+
                     <span className="font-semibold text-slate-900">
                       {item.value}
                     </span>
@@ -253,6 +514,7 @@ function Analytics() {
           <h2 className="font-semibold text-slate-900">
             Lead Conversion
           </h2>
+
           <p className="mt-1 text-sm text-slate-500">
             Leads with at least one site visit
           </p>
@@ -267,10 +529,12 @@ function Analytics() {
                   WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 14px), black calc(100% - 13px))',
                 }}
               />
+
               <div className="text-center">
                 <p className="text-3xl font-bold text-slate-900">
                   {visitConversion}%
                 </p>
+
                 <p className="text-xs text-slate-500">
                   Conversion
                 </p>
@@ -282,6 +546,7 @@ function Analytics() {
                 <p className="text-xl font-bold text-slate-900">
                   {leadsWithVisits}
                 </p>
+
                 <p className="text-xs text-slate-500">
                   Leads with visits
                 </p>
@@ -291,6 +556,7 @@ function Analytics() {
                 <p className="text-xl font-bold text-slate-900">
                   {totalLeads}
                 </p>
+
                 <p className="text-xs text-slate-500">
                   Total leads
                 </p>
@@ -304,6 +570,7 @@ function Analytics() {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2">
           <BarChart3 size={20} className="text-slate-500" />
+
           <h2 className="font-semibold text-slate-900">
             Leads by Source
           </h2>
@@ -325,6 +592,7 @@ function Analytics() {
                   <span className="font-medium text-slate-700">
                     {source}
                   </span>
+
                   <span className="text-slate-600">
                     {count} leads
                   </span>
@@ -386,25 +654,31 @@ function Analytics() {
                       <td className="py-3 font-medium text-slate-700">
                         {visit.visitCode}
                       </td>
+
                       <td className="py-3 text-slate-600">
                         {visit.lead?.buyerName || 'Unknown'}
                       </td>
+
                       <td className="py-3 text-slate-600">
                         {visit.projectName}
                       </td>
+
                       <td className="py-3 text-slate-600">
                         {visit.visitDate}
                       </td>
+
                       <td className="py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                          visit.status === 'Completed'
-                            ? 'bg-green-100 text-green-700'
-                            : visit.status === 'No Show'
-                              ? 'bg-orange-100 text-orange-700'
-                              : visit.status === 'Cancelled'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-blue-100 text-blue-700'
-                        }`}>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            visit.status === 'Completed'
+                              ? 'bg-green-100 text-green-700'
+                              : visit.status === 'No Show'
+                                ? 'bg-orange-100 text-orange-700'
+                                : visit.status === 'Cancelled'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
                           {visit.status}
                         </span>
                       </td>

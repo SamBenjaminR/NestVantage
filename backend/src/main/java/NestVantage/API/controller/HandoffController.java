@@ -7,11 +7,16 @@ import NestVantage.API.service.HandoffService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
+
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/handoffs")
 @CrossOrigin(origins = "http://localhost:5173")
+@PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
 public class HandoffController {
 
     private final HandoffService handoffService;
@@ -21,6 +26,7 @@ public class HandoffController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
     public ResponseEntity<?> requestHandoff(
             @RequestBody Map<String, Object> request) {
 
@@ -50,7 +56,13 @@ public class HandoffController {
                             ? ""
                             : handoff.getSummary()
             ));
-
+         
+            
+        } catch (AccessDeniedException exception) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", exception.getMessage()));
+                
+            
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", exception.getMessage()));
@@ -60,16 +72,21 @@ public class HandoffController {
         }
     }
     @GetMapping
-    public ResponseEntity<?> getAllHandoffs() {
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
+        public ResponseEntity<?> getAllHandoffs() {
     return ResponseEntity.ok(handoffService.getAllHandoffs());
     }
 
     @GetMapping("/{id}/messages")
-public ResponseEntity<?> getConversationHistory(@PathVariable Long id) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
+        public ResponseEntity<?> getConversationHistory(@PathVariable Long id) {
     try {
         return ResponseEntity.ok(
                 handoffService.getConversationHistory(id)
         );
+    } catch (AccessDeniedException exception) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(Map.of("error", exception.getMessage()));    
 
     } catch (IllegalArgumentException exception) {
         return ResponseEntity.badRequest()
@@ -77,6 +94,7 @@ public ResponseEntity<?> getConversationHistory(@PathVariable Long id) {
     }
 }
     @PostMapping("/{id}/accept")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
         public ResponseEntity<?> acceptHandoff(@PathVariable Long id) {
         try {
             Handoff handoff = handoffService.acceptHandoff(id);
@@ -94,6 +112,7 @@ public ResponseEntity<?> getConversationHistory(@PathVariable Long id) {
     }
 
     @PostMapping("/{id}/resolve")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_HEAD', 'SALES_EXECUTIVE')")
         public ResponseEntity<?> resolveHandoff(@PathVariable Long id) {
         try {
             Handoff handoff = handoffService.resolveHandoff(id);
