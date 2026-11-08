@@ -28,22 +28,24 @@ public class DemoUserInitializer {
 
         return args -> {
             if (demoPassword != null && demoPassword.length() >= 12) {
+
                 createExecutiveAccount(
-                    "arjun@companya.com", "SALES_EXECUTIVE",
+                    "Arjun Sharma", "arjun@companya.com", "SALES_EXECUTIVE",
                     appUserRepository, salesExecutiveRepository, passwordEncoder
                 );
 
                 createExecutiveAccount(
-                    "priya@companya.com", "SALES_EXECUTIVE",
+                    "Priya Patel", "priya@companya.com", "SALES_EXECUTIVE",
                     appUserRepository, salesExecutiveRepository, passwordEncoder
                 );
 
                 createExecutiveAccount(
-                    "rahul@companya.com", "SALES_EXECUTIVE",
+                    "Rahul Mehta", "rahul@companya.com", "SALES_EXECUTIVE",
                     appUserRepository, salesExecutiveRepository, passwordEncoder
                 );
 
                 createSalesHeadAccount(appUserRepository, passwordEncoder);
+
             } else {
                 System.out.println(
                     "Demo accounts not initialized. Configure DEMO_USER_PASSWORD (minimum 12 characters)."
@@ -61,6 +63,7 @@ public class DemoUserInitializer {
     }
 
     private void createExecutiveAccount(
+            String name,
             String email,
             String role,
             AppUserRepository appUserRepository,
@@ -68,9 +71,13 @@ public class DemoUserInitializer {
             PasswordEncoder passwordEncoder) {
 
         SalesExecutive executive = salesExecutiveRepository.findByEmail(email)
-            .orElseThrow(() ->
-                new IllegalStateException("Sales executive not found: " + email)
-            );
+            .orElseGet(() -> {
+                SalesExecutive newExecutive = new SalesExecutive();
+                newExecutive.setName(name);
+                newExecutive.setEmail(email);
+                newExecutive.setAvailable(true);
+                return salesExecutiveRepository.save(newExecutive);
+            });
 
         AppUser user = appUserRepository.findByEmail(email)
             .orElseGet(AppUser::new);
