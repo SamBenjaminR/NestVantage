@@ -1,7 +1,12 @@
 
 import { Client } from '@stomp/stompjs'
 
-const WS_URL = 'ws://localhost:8080/ws'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+
+const WS_URL = API_BASE_URL
+  .replace(/^http/, 'ws')
+  .replace(/\/api\/?$/, '/ws')
 
 export const connectHandoffSocket = (onNotification) => {
   const client = new Client({
@@ -11,7 +16,6 @@ export const connectHandoffSocket = (onNotification) => {
     onConnect: () => {
       console.log('NestVantage WebSocket connected')
 
-      // Human handoff notifications
       client.subscribe('/topic/handoffs', (message) => {
         const notification = JSON.parse(message.body)
 
@@ -21,7 +25,6 @@ export const connectHandoffSocket = (onNotification) => {
         })
       })
 
-      // Site-visit reminder notifications
       client.subscribe('/topic/site-visits', (message) => {
         const notification = JSON.parse(message.body)
 
